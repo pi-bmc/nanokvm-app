@@ -1,7 +1,6 @@
-FROM ubuntu:24.04 AS base_apt
+FROM golang:1.25-trixie AS base_apt
 
 # RUN echo 'Acquire::http::Proxy "http://cache.lan:3142";' > /etc/apt/apt.conf.d/00cacher
-RUN userdel -r ubuntu
 RUN apt update \
     && apt install wget git cmake build-essential python3 python3-venv python3-pip autoconf automake libtool gosu -y
 
@@ -20,13 +19,8 @@ RUN wget -O /tmp/host-tools.tar.gz https://sophon-file.sophon.cn/sophon-prod-s3/
 
 FROM base_apt AS golang
 
-USER root
-RUN bash -c 'wget -O /tmp/go.tar.gz https://go.dev/dl/go1.25.0.linux-$([ `uname -m` == "x86_64" ] && echo "amd64" || uname -m).tar.gz' \
-    && tar -C /usr/local -zxvf /tmp/go.tar.gz \
-    && export PATH=$PATH:/usr/local/go/bin \
-    && echo "Installed golang" &&  go version
-
-COPY server /tmp/go_cache
+ARG DOCKER_USER=build
+COPY --chown=$DOCKER_USER server /tmp/go_cache
 
 ENV PATH="$PATH:/usr/local/go/bin"
 
@@ -51,13 +45,14 @@ COPY --chown=$DOCKER_USER . /home/$DOCKER_USER/NanoKVM
 RUN cd ~/MaixCDK \
     && . ./bin/activate \
     && cd ~/NanoKVM/support/sg2002 \
-    && ./build kvm_system
+    && ./build kvm_system \
+    && ./build kvm_vision
 
 FROM base_apt
 
 # Install golang
 COPY --from=golang /usr/local/go /usr/local/go
-COPY --chown=$DOCKER_USER --from=golang /root/go /home/$DOCKER_USER/go
+COPY --chown=$DOCKER_USER --from=golang /go /home/$DOCKER_USER/go
 ENV PATH="$PATH:/usr/local/go/bin"
 
 # Install host tools

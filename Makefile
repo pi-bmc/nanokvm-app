@@ -7,16 +7,18 @@ GID := $(shell id -g)
 PWD := $(shell pwd)
 
 # Docker run common parameters
-DOCKER_RUN_BASE := docker run -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
+DOCKER_RUN_BASE := docker run --platform=linux/amd64 -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
 
 # Build commands
 GO_BUILD_CMD := cd /home/build/NanoKVM/server && go mod tidy && CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 CC=riscv64-unknown-linux-musl-gcc CGO_CFLAGS="-mcpu=c906fdv -march=rv64imafdcv0p7xthead -mcmodel=medany -mabi=lp64d" go build
 SUPPORT_BUILD_CMD := . ./home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM/support/sg2002 && ./build kvm_system && ./build kvm_system add_to_kvmapp
 
-.PHONY: help check-root builder-image rebuild-image check-image shell app support all clean
+VISION_BUILD_CMD := . /home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM/support/sg2002 && ./build kvm_vision && ./build kvm_vision add_to_kvmapp && cp -rf /home/build/NanoKVM/support/sg2002/kvm_vision_test/dist/kvm_vision_test_release/dl_lib/* /home/build/NanoKVM/server/dl_lib/ && cp -f /home/build/MaixCDK/dl/extracted/opencv/opencv4/opencv4_lib_maixcam_musl_4.9.0/dl_lib/libopencv_video.so.4.9.0 /home/build/NanoKVM/server/dl_lib/libopencv_video.so.409
+
+.PHONY: help check-root builder-image rebuild-image check-image shell app support vision all clean
 
 # Default target
-all: app support
+all: app support vision
 
 # Help target
 help:
@@ -30,7 +32,8 @@ help:
 	@echo "  shell         - Enter interactive builder environment"
 	@echo "  app           - Build Go application server"
 	@echo "  support       - Build hardware support libraries"
-	@echo "  all           - Build both app and support (default)"
+	@echo "  vision        - Build vision shared libraries (server/dl_lib)"
+	@echo "  all           - Build app, support, and vision (default)"
 	@echo "  clean         - Clean build artifacts"
 	@echo ""
 	@echo "Prerequisites:"
@@ -48,17 +51,17 @@ check-root:
 check-image: check-root
 	@echo "Checking builder image..."
 	@echo "Golang version: " && \
-		docker run --rm -i $(IMAGE_NAME) go version && \
+		docker run --platform=linux/amd64 --rm -i $(IMAGE_NAME) go version && \
 		echo "" && \
 		echo "Host-tools version:" && \
-		docker run --rm -i $(IMAGE_NAME) riscv64-unknown-linux-musl-gcc -v && \
+		docker run --platform=linux/amd64 --rm -i $(IMAGE_NAME) riscv64-unknown-linux-musl-gcc -v && \
 		echo ""
 
 # Build Docker image if it doesn't exist
 builder-image: check-root
 	@if ! docker image inspect $(IMAGE_NAME) >/dev/null 2>&1; then \
 		echo "Building Docker image..."; \
-		docker build -t $(IMAGE_NAME) -f docker/Dockerfile ./; \
+		docker buildx build --platform linux/amd64 -t $(IMAGE_NAME) -f docker/Dockerfile ./; \
 	else \
 		echo "Docker image $(IMAGE_NAME) already exists."; \
 	fi
@@ -66,12 +69,12 @@ builder-image: check-root
 # Force rebuild Docker image
 rebuild-image: check-root
 	@echo "Force rebuilding Docker image..."
-	@docker build --no-cache -t $(IMAGE_NAME) -f docker/Dockerfile ./
+	@docker buildx build --platform linux/amd64 --no-cache -t $(IMAGE_NAME) -f docker/Dockerfile ./
 
 # Enter interactive shell (equivalent to build.sh with no arguments)
 shell: check-root builder-image
 	@echo "Switching into builder..."
-	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c ". ./home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM ; exec bash"
+	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c ". /home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM ; exec bash"
 
 # Build Go application
 app: check-root builder-image
@@ -82,6 +85,11 @@ app: check-root builder-image
 support: check-root builder-image
 	@echo "Building support..."
 	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c '$(SUPPORT_BUILD_CMD)'
+
+# Build vision shared libraries into server/dl_lib
+vision: check-root builder-image
+	@echo "Building vision (dl_lib)..."
+	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c '$(VISION_BUILD_CMD)'
 
 # Clean build artifacts
 clean:
