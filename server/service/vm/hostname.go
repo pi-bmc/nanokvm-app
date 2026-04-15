@@ -33,9 +33,9 @@ func (s *Service) SetHostname(c *gin.Context) {
 		return
 	}
 
-	oldHostname := strings.Replace(string(dataRead), "\n", "", -1)
+	oldHostname := strings.ReplaceAll(string(dataRead), "\n", "")
 
-	if (oldHostname != req.Hostname) {
+	if oldHostname != req.Hostname {
 		dataRead, err = os.ReadFile(EtcHosts)
 		if err != nil {
 			rsp.ErrRsp(c, -1, "read Hosts failed")
@@ -78,7 +78,7 @@ func (s *Service) GetHostname(c *gin.Context) {
 	}
 
 	rsp.OkRspWithData(c, &proto.GetHostnameRsp{
-		Hostname: strings.Replace(string(data), "\n", "", -1),
+		Hostname: strings.ReplaceAll(string(data), "\n", ""),
 	})
 	log.Debugf("get Hostname successful")
 }
