@@ -11,6 +11,28 @@ import (
 	"github.com/tinkerbell-community/NanoKVM/server/config"
 )
 
+// handleGetDeviceID returns BMC device identification per IPMI Table 20-2.
+func handleGetDeviceID() []byte {
+	resp := make([]byte, 16)
+	resp[0] = ccOK
+	resp[1] = 0x20       // Device ID
+	resp[2] = 0x01       // Device Revision
+	resp[3] = 0x02       // Firmware Revision 1 (major): 2
+	resp[4] = 0x00       // Firmware Revision 2 (minor): 0
+	resp[5] = 0x02       // IPMI version: 2.0
+	resp[6] = 0x2F       // Additional device support (chassis, SEL, SDR, FRU, IPMB)
+	resp[7] = 0xA2       // Manufacturer ID (3 bytes, LE) — placeholder
+	resp[8] = 0x02
+	resp[9] = 0x00
+	resp[10] = 0x01      // Product ID (2 bytes, LE)
+	resp[11] = 0x00
+	resp[12] = 0x00      // Aux Firmware Revision
+	resp[13] = 0x00
+	resp[14] = 0x00
+	resp[15] = 0x00
+	return resp
+}
+
 // In-memory boot option storage.
 var (
 	bootMu          sync.Mutex

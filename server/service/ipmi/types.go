@@ -53,6 +53,7 @@ const (
 
 // App commands
 const (
+	cmdGetDeviceID       byte = 0x01
 	cmdGetChannelAuthCap byte = 0x38
 	cmdSetSessionPriv    byte = 0x3B
 	cmdCloseSession      byte = 0x3C

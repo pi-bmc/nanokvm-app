@@ -296,16 +296,17 @@ func (sm *sessionManager) handleRAKPMsg1(data []byte, addr *net.UDPAddr, srv *Se
 	sess.server = srv
 	sess.state = stateRAKP1Done
 
-	// Compute RAKP Message 2 auth code:
-	// HMAC_Kuid(SIDm || SIDc || Rm || Rc || GUIDm || RoleM || ULm || UserNameM)
+	// Compute RAKP Message 2 auth code per IPMI 2.0 Table 13-14:
+	// HMAC_Kuid(SIDc || SIDm || Rm || Rc || GUIDm || RoleM || ULm || UserNameM)
+	// Note: ipmitool convention places console session ID first, BMC session ID second.
 	var hmacInput []byte
-	sidm := make([]byte, 4)
 	sidc := make([]byte, 4)
-	binary.LittleEndian.PutUint32(sidm, sess.bmcSessionID)
+	sidm := make([]byte, 4)
 	binary.LittleEndian.PutUint32(sidc, sess.consoleSessionID)
+	binary.LittleEndian.PutUint32(sidm, sess.bmcSessionID)
 
-	hmacInput = append(hmacInput, sidm...)
 	hmacInput = append(hmacInput, sidc...)
+	hmacInput = append(hmacInput, sidm...)
 	hmacInput = append(hmacInput, sess.consoleRandom[:]...)
 	hmacInput = append(hmacInput, sess.bmcRandom[:]...)
 	hmacInput = append(hmacInput, bmcGUID[:]...)
@@ -386,13 +387,14 @@ func (sm *sessionManager) handleRAKPMsg3(data []byte) []byte {
 	sess.state = stateActive
 	log.Infof("IPMI: session 0x%08x activated for user %q", sess.bmcSessionID, sess.username)
 
-	// Compute RAKP Message 4 integrity check value:
-	// HMAC_SIK(Rm || SIDc || GUIDm) truncated to 12 bytes
+	// Compute RAKP Message 4 integrity check value per IPMI 2.0 Table 13-17:
+	// HMAC_SIK(Rm || SIDm || GUIDm) truncated to 12 bytes
+	// Note: SIDm here is the BMC's session ID (per ipmitool convention).
 	var icvInput []byte
-	sidc := make([]byte, 4)
-	binary.LittleEndian.PutUint32(sidc, sess.consoleSessionID)
+	sidm := make([]byte, 4)
+	binary.LittleEndian.PutUint32(sidm, sess.bmcSessionID)
 	icvInput = append(icvInput, sess.consoleRandom[:]...)
-	icvInput = append(icvInput, sidc...)
+	icvInput = append(icvInput, sidm...)
 	icvInput = append(icvInput, bmcGUID[:]...)
 	icv := computeHMACSHA196(sess.sik, icvInput)
 
@@ -443,6 +445,8 @@ func (sm *sessionManager) handleIPMIPayload(sess *session, payload []byte, authe
 
 	case netFnAppReq:
 		switch cmd {
+		case cmdGetDeviceID:
+			respData = handleGetDeviceID()
 		case cmdGetChannelAuthCap:
 			respData = handleGetChannelAuthCap(cmdData)
 		case cmdSetSessionPriv:
