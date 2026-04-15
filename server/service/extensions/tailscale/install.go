@@ -1,11 +1,12 @@
 package tailscale
 
 import (
-	"NanoKVM-Server/utils"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 
 	log "github.com/sirupsen/logrus"
 )

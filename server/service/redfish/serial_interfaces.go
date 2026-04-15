@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"NanoKVM-Server/config"
-	"NanoKVM-Server/service/serial"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/service/serial"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

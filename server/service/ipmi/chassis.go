@@ -8,7 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"NanoKVM-Server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
 )
 
 // In-memory boot option storage.

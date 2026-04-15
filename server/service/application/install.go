@@ -5,8 +5,8 @@ import (
 	"os"
 	"sync"
 
-	"NanoKVM-Server/utils"
 	log "github.com/sirupsen/logrus"
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 )
 
 var (

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"NanoKVM-Server/middleware"
-	"NanoKVM-Server/service/auth"
+	"github.com/tinkerbell-community/NanoKVM/server/middleware"
+	"github.com/tinkerbell-community/NanoKVM/server/service/auth"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"NanoKVM-Server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

@@ -11,7 +11,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"NanoKVM-Server/service/serial"
+	"github.com/tinkerbell-community/NanoKVM/server/service/serial"
 )
 
 // sessionState tracks RMCP+ authentication progress.

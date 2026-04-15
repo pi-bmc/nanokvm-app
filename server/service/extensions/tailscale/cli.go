@@ -1,7 +1,6 @@
 package tailscale
 
 import (
-	"NanoKVM-Server/utils"
 	"bufio"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 )
 
 const (

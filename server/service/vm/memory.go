@@ -1,8 +1,8 @@
 package vm
 
 import (
-	"NanoKVM-Server/proto"
-	"NanoKVM-Server/utils"
+	"github.com/tinkerbell-community/NanoKVM/server/proto"
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

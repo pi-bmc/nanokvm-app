@@ -4,9 +4,9 @@ import (
 	"io/fs"
 	"net/http"
 
-	"NanoKVM-Server/assets"
-	"NanoKVM-Server/gintemplrenderer"
-	"NanoKVM-Server/templates"
+	"github.com/tinkerbell-community/NanoKVM/server/assets"
+	"github.com/tinkerbell-community/NanoKVM/server/gintemplrenderer"
+	"github.com/tinkerbell-community/NanoKVM/server/templates"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

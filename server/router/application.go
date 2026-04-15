@@ -1,8 +1,8 @@
 package router
 
 import (
-	"NanoKVM-Server/middleware"
-	"NanoKVM-Server/service/application"
+	"github.com/tinkerbell-community/NanoKVM/server/middleware"
+	"github.com/tinkerbell-community/NanoKVM/server/service/application"
 
 	"github.com/gin-gonic/gin"
 )

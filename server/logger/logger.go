@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"NanoKVM-Server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
 
 	"github.com/sirupsen/logrus"
 )

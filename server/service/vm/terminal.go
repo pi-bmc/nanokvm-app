@@ -11,7 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 
-	"NanoKVM-Server/service/serial"
+	"github.com/tinkerbell-community/NanoKVM/server/service/serial"
 )
 
 const (

@@ -1,13 +1,14 @@
 package auth
 
 import (
-	"NanoKVM-Server/proto"
-	"NanoKVM-Server/utils"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/tinkerbell-community/NanoKVM/server/proto"
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

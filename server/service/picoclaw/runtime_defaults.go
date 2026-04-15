@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	serverConfig "NanoKVM-Server/config"
+	serverConfig "github.com/tinkerbell-community/NanoKVM/server/config"
 )
 
 const (

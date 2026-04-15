@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"NanoKVM-Server/config"
-	"NanoKVM-Server/proto"
-	"NanoKVM-Server/utils"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/proto"
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 )
 
 func (s *Service) SetTls(c *gin.Context) {

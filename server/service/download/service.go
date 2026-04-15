@@ -1,18 +1,19 @@
 package download
 
 import (
-	"NanoKVM-Server/proto"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
-	"regexp"
+
+	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
+	"github.com/tinkerbell-community/NanoKVM/server/proto"
 )
 
 type Service struct{}

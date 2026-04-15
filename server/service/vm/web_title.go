@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"NanoKVM-Server/proto"
+	"github.com/tinkerbell-community/NanoKVM/server/proto"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"NanoKVM-Server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
 )
 
 func ListenAndServeLoopbackHTTPRedirect(

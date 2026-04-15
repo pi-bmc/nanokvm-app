@@ -3,8 +3,8 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"NanoKVM-Server/middleware"
-	"NanoKVM-Server/service/picoclaw"
+	"github.com/tinkerbell-community/NanoKVM/server/middleware"
+	"github.com/tinkerbell-community/NanoKVM/server/service/picoclaw"
 )
 
 const (

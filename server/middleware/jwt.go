@@ -8,7 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
 
-	"NanoKVM-Server/config"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
 )
 
 type Token struct {

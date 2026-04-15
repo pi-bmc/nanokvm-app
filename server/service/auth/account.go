@@ -1,11 +1,12 @@
 package auth
 
 import (
-	"NanoKVM-Server/utils"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/tinkerbell-community/NanoKVM/server/utils"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
