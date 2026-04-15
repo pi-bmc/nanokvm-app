@@ -459,9 +459,9 @@ templ ConsolePage() {
 		<script src="/js/xterm-addon-fit.min.js"></script>
 		<script src="/js/xterm-addon-attach.min.js"></script>
 		<script>
-			const { Terminal } = window.Terminal;
-			const { FitAddon } = window.FitAddon;
-			const { AttachAddon } = window.AttachAddon;
+			const Terminal = window.Terminal;
+			const FitAddon = window.FitAddon?.FitAddon || window.FitAddon;
+			const AttachAddon = window.AttachAddon?.AttachAddon || window.AttachAddon;
 
 			let term = null;
 			let ws = null;
