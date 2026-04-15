@@ -11,6 +11,8 @@ import (
 	"github.com/tinkerbell-community/NanoKVM/server/config"
 )
 
+const cookieName = "nano-kvm-token"
+
 type Token struct {
 	Username string `json:"username"`
 	jwt.RegisteredClaims
@@ -24,6 +26,37 @@ func CheckToken() gin.HandlerFunc {
 		}
 
 		abortUnauthorized(c)
+	}
+}
+
+// CheckPageAuth protects server-rendered pages by validating the JWT
+// cookie. On failure it clears the stale cookie and redirects to the
+// login page. When authentication is disabled globally it passes through.
+func CheckPageAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		conf := config.GetInstance()
+		if conf.Authentication == "disable" {
+			c.Next()
+			return
+		}
+
+		cookie, err := c.Cookie(cookieName)
+		if err != nil || cookie == "" {
+			c.Redirect(http.StatusFound, "/auth/login")
+			c.Abort()
+			return
+		}
+
+		if _, err := ParseJWT(cookie); err != nil {
+			// Token invalid or expired — clear it so the browser stops
+			// sending the stale value on every request.
+			clearAuthCookie(c)
+			c.Redirect(http.StatusFound, "/auth/login")
+			c.Abort()
+			return
+		}
+
+		c.Next()
 	}
 }
 
@@ -56,7 +89,7 @@ func allowByToken(c *gin.Context) bool {
 		return true
 	}
 
-	cookie, err := c.Cookie("nano-kvm-token")
+	cookie, err := c.Cookie(cookieName)
 	if err != nil {
 		return false
 	}
@@ -68,6 +101,11 @@ func allowByToken(c *gin.Context) bool {
 func abortUnauthorized(c *gin.Context) {
 	c.JSON(http.StatusUnauthorized, "unauthorized")
 	c.Abort()
+}
+
+// clearAuthCookie expires the nano-kvm-token cookie.
+func clearAuthCookie(c *gin.Context) {
+	c.SetCookie(cookieName, "", -1, "/", "", false, false)
 }
 
 func GenerateJWT(username string) (string, error) {

@@ -5,7 +5,9 @@ import (
 	"net/http"
 
 	"github.com/tinkerbell-community/NanoKVM/server/assets"
+	"github.com/tinkerbell-community/NanoKVM/server/config"
 	"github.com/tinkerbell-community/NanoKVM/server/gintemplrenderer"
+	"github.com/tinkerbell-community/NanoKVM/server/middleware"
 	"github.com/tinkerbell-community/NanoKVM/server/templates"
 
 	"github.com/gin-gonic/gin"
@@ -38,29 +40,50 @@ func web(r *gin.Engine) {
 		c.Data(http.StatusOK, "image/x-icon", data)
 	})
 
-	// Root redirects to dashboard
-	r.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusFound, "/dashboard")
-	})
-
-	// Server-rendered templ pages
-	r.GET("/dashboard", func(c *gin.Context) {
-		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.DashboardPage())
-		c.Render(http.StatusOK, render)
-	})
-	r.GET("/console", func(c *gin.Context) {
-		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.ConsolePage())
-		c.Render(http.StatusOK, render)
-	})
-	r.GET("/settings", func(c *gin.Context) {
-		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.SettingsPage())
-		c.Render(http.StatusOK, render)
-	})
+	// Public auth pages (no middleware)
 	r.GET("/auth/login", func(c *gin.Context) {
 		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.LoginPage())
 		c.Render(http.StatusOK, render)
 	})
-	r.GET("/auth/password", func(c *gin.Context) {
+
+	// Token validation endpoint for client-side redirect decisions
+	r.GET("/api/auth/check", func(c *gin.Context) {
+		conf := config.GetInstance()
+		if conf.Authentication == "disable" {
+			c.JSON(http.StatusOK, gin.H{"valid": true})
+			return
+		}
+		cookie, err := c.Cookie("nano-kvm-token")
+		if err != nil || cookie == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"valid": false})
+			return
+		}
+		if _, err := middleware.ParseJWT(cookie); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"valid": false})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"valid": true})
+	})
+
+	// Protected pages — require valid JWT cookie, redirect to login otherwise
+	protected := r.Group("/").Use(middleware.CheckPageAuth())
+
+	protected.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/dashboard")
+	})
+	protected.GET("/dashboard", func(c *gin.Context) {
+		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.DashboardPage())
+		c.Render(http.StatusOK, render)
+	})
+	protected.GET("/console", func(c *gin.Context) {
+		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.ConsolePage())
+		c.Render(http.StatusOK, render)
+	})
+	protected.GET("/settings", func(c *gin.Context) {
+		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.SettingsPage())
+		c.Render(http.StatusOK, render)
+	})
+	protected.GET("/auth/password", func(c *gin.Context) {
 		render := gintemplrenderer.New(c.Request.Context(), http.StatusOK, templates.PasswordPage())
 		c.Render(http.StatusOK, render)
 	})

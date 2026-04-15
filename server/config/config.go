@@ -78,9 +78,9 @@ func create() {
 		err  error
 	)
 
-	_ = os.MkdirAll("/etc/kvm", 0o644)
+	_ = os.MkdirAll("/etc/kvm", 0o755)
 
-	file, err = os.OpenFile("/etc/kvm/server.yaml", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	file, err = os.OpenFile("/etc/kvm/server.yaml", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		log.Printf("open config failed: %s", err)
 		return
@@ -119,4 +119,24 @@ func validate() error {
 	create()
 
 	return readByDefault()
+}
+
+// persistConfig writes the current in-memory config back to disk.
+// This is used to save generated values (e.g. JWT secret key) so they
+// survive server restarts.
+func persistConfig() {
+	data, err := yaml.Marshal(&instance)
+	if err != nil {
+		log.Printf("failed to marshal config for persist: %s", err)
+		return
+	}
+
+	_ = os.MkdirAll("/etc/kvm", 0o755)
+
+	if err := os.WriteFile("/etc/kvm/server.yaml", data, 0o600); err != nil {
+		log.Printf("failed to persist config: %s", err)
+		return
+	}
+
+	log.Println("persisted generated JWT secret key to /etc/kvm/server.yaml")
 }

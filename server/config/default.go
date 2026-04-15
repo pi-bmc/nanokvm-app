@@ -48,9 +48,12 @@ var defaultConfig = &Config{
 }
 
 func checkDefaultValue() {
+	needsPersist := false
+
 	if instance.JWT.SecretKey == "" {
 		instance.JWT.SecretKey = generateRandomSecretKey()
 		instance.JWT.RevokeTokensOnLogout = true
+		needsPersist = true
 	}
 
 	if instance.JWT.RefreshTokenDuration == 0 {
@@ -86,4 +89,9 @@ func checkDefaultValue() {
 	}
 
 	instance.Hardware = getHardware()
+
+	// Persist the generated secret key so tokens survive server restarts.
+	if needsPersist {
+		persistConfig()
+	}
 }
