@@ -2,15 +2,16 @@ package vm
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
+	"sync"
 	"time"
 
-	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+
+	"NanoKVM-Server/service/serial"
 )
 
 const (
@@ -18,6 +19,8 @@ const (
 	maxMessageSize = 1024
 )
 
+// WinSize is sent by the xterm.js client on resize. Logged but not acted
+// upon because picocom does not support PTY resize.
 type WinSize struct {
 	Rows uint16 `json:"rows"`
 	Cols uint16 `json:"cols"`
@@ -31,6 +34,27 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// wsWriter adapts a WebSocket connection to io.Writer so the serial
+// broker can fan out port output to the client.
+type wsWriter struct {
+	ws *websocket.Conn
+	mu sync.Mutex
+}
+
+func (w *wsWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if err := w.ws.SetWriteDeadline(time.Now().Add(messageWait)); err != nil {
+		return 0, err
+	}
+	if err := w.ws.WriteMessage(websocket.BinaryMessage, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// Terminal upgrades the HTTP connection to a WebSocket and bridges it to
+// the shared serial port via the serial broker.
 func (s *Service) Terminal(c *gin.Context) {
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -41,46 +65,20 @@ func (s *Service) Terminal(c *gin.Context) {
 		_ = ws.Close()
 	}()
 
-	cmd := exec.Command("/bin/sh")
-	ptmx, err := pty.Start(cmd)
+	sessionID := fmt.Sprintf("ws-%s-%d", c.ClientIP(), time.Now().UnixNano())
+	broker := serial.GetBroker()
+
+	writer := &wsWriter{ws: ws}
+	_, err = broker.Connect(sessionID, writer)
 	if err != nil {
-		log.Errorf("failed to start pty: %s", err)
+		log.Errorf("serial broker connect failed: %s", err)
+		// Best-effort error message to the client before closing.
+		_ = ws.WriteMessage(websocket.TextMessage, []byte("serial error: "+err.Error()))
 		return
 	}
-	defer func() {
-		_ = ptmx.Close()
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}()
+	defer broker.Disconnect(sessionID)
 
-	go wsWrite(ws, ptmx)
-	wsRead(ws, ptmx)
-}
-
-// pty to ws
-func wsWrite(ws *websocket.Conn, ptmx *os.File) {
-	data := make([]byte, maxMessageSize)
-
-	for {
-		n, err := ptmx.Read(data)
-		if err != nil {
-			return
-		}
-
-		if n > 0 {
-			_ = ws.SetWriteDeadline(time.Now().Add(messageWait))
-
-			err = ws.WriteMessage(websocket.BinaryMessage, data[:n])
-			if err != nil {
-				log.Errorf("write ws message failed: %s", err)
-				return
-			}
-		}
-	}
-}
-
-// ws to pty
-func wsRead(ws *websocket.Conn, ptmx *os.File) {
+	// Read loop: forward WebSocket messages to the serial port.
 	var zeroTime time.Time
 	_ = ws.SetReadDeadline(zeroTime)
 
@@ -90,21 +88,18 @@ func wsRead(ws *websocket.Conn, ptmx *os.File) {
 			return
 		}
 
-		// resize message
+		// Binary messages from xterm.js carry resize notifications.
 		if msgType == websocket.BinaryMessage {
 			var winSize WinSize
-			if err := json.Unmarshal(p, &winSize); err == nil {
-				_ = pty.Setsize(ptmx, &pty.Winsize{
-					Rows: winSize.Rows,
-					Cols: winSize.Cols,
-				})
+			if json.Unmarshal(p, &winSize) == nil {
+				log.Debugf("terminal resize %dx%d (ignored – serial)", winSize.Cols, winSize.Rows)
 			}
 			continue
 		}
 
-		_, err = ptmx.Write(p)
-		if err != nil {
-			log.Errorf("failed to write to pty: %s", err)
+		// Text messages are keyboard input destined for the serial port.
+		if _, err := broker.Write(p); err != nil {
+			log.Errorf("serial write failed: %s", err)
 			return
 		}
 	}
