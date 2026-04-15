@@ -8,3 +8,8 @@ import (
 func (s *Service) Screenshot(c *gin.Context) {
 	writePicoclawError(c, newPicoclawError(CodeScreenshotFailed, "HDMI capture not available in serial-only mode"))
 }
+
+// captureScreenshot is a stub — HDMI capture is not available in serial-only mode.
+func (s *Service) captureScreenshot(_ ScreenshotQuery) ([]byte, ScreenshotMeta, *PicoclawError) {
+	return nil, ScreenshotMeta{}, newPicoclawError(CodeScreenshotFailed, "HDMI capture not available in serial-only mode")
+}

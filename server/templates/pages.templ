@@ -30,6 +30,7 @@ templ PasswordPage(bundlePath string) {
 templ DashboardPage() {
 	@layout("NanoKVM BMC - Dashboard") {
 		<div class="p-6 space-y-6">
+			<!-- Power Control -->
 			<div class="card">
 				<h2 class="text-lg font-semibold mb-4">Power Control</h2>
 				<div class="flex items-center space-x-3">
@@ -40,6 +41,7 @@ templ DashboardPage() {
 				<p class="text-xs text-neutral-500 mt-2">Power On/Off sends a short press. Force Off holds { "for" } 5 seconds.</p>
 			</div>
 
+			<!-- Boot Device Override -->
 			<div class="card">
 				<h2 class="text-lg font-semibold mb-4">Boot Device Override</h2>
 				<div class="flex items-center space-x-3">
@@ -55,6 +57,7 @@ templ DashboardPage() {
 				<p id="boot-status" class="text-xs text-neutral-500 mt-2"></p>
 			</div>
 
+			<!-- Quick Links -->
 			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 				<a href="/console" class="card hover:border-blue-700 transition-colors">
 					<h3 class="font-semibold">Serial Console</h3>
@@ -62,7 +65,7 @@ templ DashboardPage() {
 				</a>
 				<div class="card">
 					<h3 class="font-semibold">IPMI</h3>
-					<p class="text-sm text-neutral-400 mt-1">IPMI over LAN available on UDP port 623. Use <span class="font-mono text-neutral-300">ipmitool</span> { "for" } command-line access.</p>
+					<p class="text-sm text-neutral-400 mt-1">IPMI over LAN available on UDP port 623. Use <code class="text-neutral-300">ipmitool</code> { "for" } command-line access.</p>
 				</div>
 				<div class="card">
 					<h3 class="font-semibold">Redfish API</h3>
@@ -70,6 +73,7 @@ templ DashboardPage() {
 				</div>
 			</div>
 
+			<!-- System Information -->
 			<div class="card">
 				<h2 class="text-lg font-semibold mb-4">System Information</h2>
 				<div id="sys-info" class="grid grid-cols-2 gap-2 text-sm">
@@ -139,6 +143,7 @@ templ ConsolePage() {
 	@layout("NanoKVM BMC - Serial Console") {
 		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css"/>
 		<div class="flex h-full flex-col">
+			<!-- Serial config bar -->
 			<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
 				<div class="flex items-center space-x-3">
 					<label class="text-xs text-neutral-400">Port</label>

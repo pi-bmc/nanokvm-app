@@ -1,4 +1,4 @@
-# Makefile for NanoKVM Project
+# Makefile for NanoKVM BMC Project
 
 # Configuration
 IMAGE_NAME := nanokvm-builder
@@ -9,20 +9,19 @@ PWD := $(shell pwd)
 # Docker run common parameters
 DOCKER_RUN_BASE := docker run --platform=linux/amd64 -e UID=$(UID) -e GID=$(GID) -v $(PWD):/home/build/NanoKVM --rm
 
-# Build commands
-GO_BUILD_CMD := cd /home/build/NanoKVM/server && go mod tidy && CGO_ENABLED=1 GOOS=linux GOARCH=riscv64 CC=riscv64-unknown-linux-musl-gcc CGO_CFLAGS="-mcpu=c906fdv -march=rv64imafdcv0p7xthead -mcmodel=medany -mabi=lp64d" go build
+# Build commands (CGo disabled — HDMI vision library removed)
+GO_BUILD_CMD := cd /home/build/NanoKVM/server && go mod tidy && CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build
+TEMPL_GENERATE_CMD := cd /home/build/NanoKVM/server && templ generate
 SUPPORT_BUILD_CMD := . ./home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM/support/sg2002 && ./build kvm_system && ./build kvm_system add_to_kvmapp
 
-VISION_BUILD_CMD := . /home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM/support/sg2002 && ./build kvm_vision && ./build kvm_vision add_to_kvmapp && cp -rf /home/build/NanoKVM/support/sg2002/kvm_vision_test/dist/kvm_vision_test_release/dl_lib/* /home/build/NanoKVM/server/dl_lib/ && cp -f /home/build/MaixCDK/dl/extracted/opencv/opencv4/opencv4_lib_maixcam_musl_4.9.0/dl_lib/libopencv_video.so.4.9.0 /home/build/NanoKVM/server/dl_lib/libopencv_video.so.409
-
-.PHONY: help check-root builder-image rebuild-image check-image shell app support vision all clean
+.PHONY: help check-root builder-image rebuild-image check-image shell templ app support all clean
 
 # Default target
-all: app support vision
+all: app support
 
 # Help target
 help:
-	@echo "NanoKVM Build System"
+	@echo "NanoKVM BMC Build System"
 	@echo ""
 	@echo "Available targets:"
 	@echo "  help          - Show this help message"
@@ -30,10 +29,10 @@ help:
 	@echo "  builder-image - Build Docker image if not exists"
 	@echo "  rebuild-image - Force rebuild Docker image"
 	@echo "  shell         - Enter interactive builder environment"
-	@echo "  app           - Build Go application server"
+	@echo "  templ         - Generate Go code from templ templates"
+	@echo "  app           - Build Go application server (runs templ generate first)"
 	@echo "  support       - Build hardware support libraries"
-	@echo "  vision        - Build vision shared libraries (server/dl_lib)"
-	@echo "  all           - Build app, support, and vision (default)"
+	@echo "  all           - Build app and support (default)"
 	@echo "  clean         - Clean build artifacts"
 	@echo ""
 	@echo "Prerequisites:"
@@ -76,8 +75,13 @@ shell: check-root builder-image
 	@echo "Switching into builder..."
 	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c ". /home/build/MaixCDK/bin/activate && cd /home/build/NanoKVM ; exec bash"
 
-# Build Go application
-app: check-root builder-image
+# Generate Go code from templ templates
+templ:
+	@echo "Generating templ code..."
+	@cd server && templ generate
+
+# Build Go application (generates templ first)
+app: templ check-root builder-image
 	@echo "Building app..."
 	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c '$(GO_BUILD_CMD)'
 
@@ -85,11 +89,6 @@ app: check-root builder-image
 support: check-root builder-image
 	@echo "Building support..."
 	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c '$(SUPPORT_BUILD_CMD)'
-
-# Build vision shared libraries into server/dl_lib
-vision: check-root builder-image
-	@echo "Building vision (dl_lib)..."
-	@$(DOCKER_RUN_BASE) -it $(IMAGE_NAME) /bin/bash -c '$(VISION_BUILD_CMD)'
 
 # Clean build artifacts
 clean:

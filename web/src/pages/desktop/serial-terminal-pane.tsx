@@ -8,7 +8,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import { getBaseUrl } from '@/lib/service.ts';
 import { serialConfigAtom, serialConnectCountAtom } from '@/jotai/serial.ts';
-import { validatePicocomParameters } from '@/pages/terminal/validater.ts';
+import { validatePicocomParameters } from '@/lib/picocom-validator.ts';
 
 export const SerialTerminalPane = () => {
   const config = useAtomValue(serialConfigAtom);

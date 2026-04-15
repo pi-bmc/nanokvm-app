@@ -18,6 +18,8 @@ import (
 	cors "github.com/rs/cors/wrapper/gin"
 )
 
+var ipmiServer *ipmi.Server
+
 func main() {
 	initialize()
 	defer dispose()
@@ -29,7 +31,12 @@ func initialize() {
 	logger.Init()
 
 	// Start IPMI server on standard port 623
-	go ipmi.Start(623)
+	srv, err := ipmi.Start(623)
+	if err != nil {
+		log.Printf("IPMI server failed to start: %v", err)
+	} else {
+		ipmiServer = srv
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -85,5 +92,7 @@ func run() {
 }
 
 func dispose() {
-	ipmi.Stop()
+	if ipmiServer != nil {
+		ipmiServer.Stop()
+	}
 }
