@@ -1,0 +1,416 @@
+package templates
+
+// IndexPage is the main SPA entry point.
+// It renders the HTML shell with a #root div for React to mount into,
+// then loads the Vite-built JS bundle.
+templ IndexPage(bundlePath string) {
+	@layout("NanoKVM BMC") {
+		<div id="root"></div>
+		<script type="module" src={ bundlePath }></script>
+	}
+}
+
+// LoginPage serves the login route with React island.
+templ LoginPage(bundlePath string) {
+	@layout("NanoKVM - Login") {
+		<div id="root"></div>
+		<script type="module" src={ bundlePath }></script>
+	}
+}
+
+// PasswordPage serves the password change route with React island.
+templ PasswordPage(bundlePath string) {
+	@layout("NanoKVM - Password") {
+		<div id="root"></div>
+		<script type="module" src={ bundlePath }></script>
+	}
+}
+
+// DashboardPage is the server-rendered BMC dashboard.
+templ DashboardPage() {
+	@layout("NanoKVM BMC - Dashboard") {
+		<div class="p-6 space-y-6">
+			<!-- Power Control -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">Power Control</h2>
+				<div class="flex items-center space-x-3">
+					<button class="btn btn-blue" onclick="powerAction('power', 800)" id="btn-power">Power On/Off</button>
+					<button class="btn btn-yellow" onclick="powerAction('reset', 800)" id="btn-reset">Reset</button>
+					<button class="btn btn-red" onclick="powerAction('power', 5000)" id="btn-forceoff">Force Off</button>
+				</div>
+				<p class="text-xs text-neutral-500 mt-2">Power On/Off sends a short press. Force Off holds for 5 seconds.</p>
+			</div>
+
+			<!-- Boot Device Override -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">Boot Device Override</h2>
+				<div class="flex items-center space-x-3">
+					<select id="boot-device" class="bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm">
+						<option value="None">None (Default)</option>
+						<option value="Pxe">PXE Network Boot</option>
+						<option value="Hdd">Hard Disk</option>
+						<option value="Cd">CD/DVD</option>
+						<option value="BiosSetup">BIOS Setup</option>
+					</select>
+					<button class="btn btn-neutral" onclick="setBootDevice()">Set Boot Device</button>
+				</div>
+				<p id="boot-status" class="text-xs text-neutral-500 mt-2"></p>
+			</div>
+
+			<!-- Quick Links -->
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+				<a href="/console" class="card hover:border-blue-700 transition-colors">
+					<h3 class="font-semibold">Serial Console</h3>
+					<p class="text-sm text-neutral-400 mt-1">Open the serial-over-LAN console to interact with the managed system.</p>
+				</a>
+				<div class="card">
+					<h3 class="font-semibold">IPMI</h3>
+					<p class="text-sm text-neutral-400 mt-1">IPMI over LAN available on UDP port 623. Use <code class="text-neutral-300">ipmitool</code> for command-line access.</p>
+				</div>
+				<div class="card">
+					<h3 class="font-semibold">Redfish API</h3>
+					<p class="text-sm text-neutral-400 mt-1">REST API at <a href="/redfish/v1" class="text-blue-400 hover:underline">/redfish/v1</a> for programmatic management.</p>
+				</div>
+			</div>
+
+			<!-- System Info -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">System Information</h2>
+				<div id="sys-info" class="grid grid-cols-2 gap-2 text-sm">
+					<span class="text-neutral-500">Loading...</span>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			const token = localStorage.getItem('nano-kvm-token') || '';
+			const headers = { 'Content-Type': 'application/json', 'token': token };
+
+			async function powerAction(type, duration) {
+				document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+				try {
+					await fetch('/api/vm/gpio', { method: 'POST', headers, body: JSON.stringify({type, duration}) });
+				} catch(e) { console.error(e); }
+				setTimeout(() => {
+					document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+					pollPower();
+				}, 2000);
+			}
+
+			async function setBootDevice() {
+				const device = document.getElementById('boot-device').value;
+				try {
+					const r = await fetch('/redfish/v1/Systems/1', {
+						method: 'PATCH', headers,
+						body: JSON.stringify({ Boot: { BootSourceOverrideTarget: device } })
+					});
+					const data = await r.json();
+					document.getElementById('boot-status').textContent =
+						'Boot device set to: ' + (data.Boot?.BootSourceOverrideTarget || device);
+				} catch(e) {
+					document.getElementById('boot-status').textContent = 'Failed to set boot device';
+				}
+			}
+
+			async function loadSysInfo() {
+				try {
+					const r = await fetch('/api/vm/info', { headers: { 'token': token } });
+					const data = await r.json();
+					if (data.code === 0) {
+						const info = data.data;
+						const el = document.getElementById('sys-info');
+						el.innerHTML = '';
+						const fields = [
+							['Application', info.application || '-'],
+							['Image Version', info.imageVersion || '-'],
+							['Hardware', info.hardware || '-'],
+							['IP', info.ip || '-'],
+							['MAC', info.mac || '-'],
+						];
+						fields.forEach(([k,v]) => {
+							el.innerHTML += '<span class="text-neutral-500">' + k + '</span><span>' + v + '</span>';
+						});
+					}
+				} catch(e) {}
+			}
+			loadSysInfo();
+		</script>
+	}
+}
+
+// ConsolePage is the server-rendered serial console page with xterm.js.
+templ ConsolePage() {
+	@layout("NanoKVM BMC - Serial Console") {
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css"/>
+		<div class="flex h-full flex-col">
+			<!-- Serial config bar -->
+			<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
+				<div class="flex items-center space-x-3">
+					<label class="text-xs text-neutral-400">Port</label>
+					<select id="serial-port" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs">
+						<option value="/dev/ttyS1">/dev/ttyS1</option>
+						<option value="/dev/ttyS2">/dev/ttyS2</option>
+					</select>
+					<label class="text-xs text-neutral-400">Baud</label>
+					<input id="serial-baud" type="number" value="115200" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs w-24"/>
+					<label class="text-xs text-neutral-400">Parity</label>
+					<select id="serial-parity" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs">
+						<option value="none">None</option>
+						<option value="even">Even</option>
+						<option value="odd">Odd</option>
+					</select>
+					<label class="text-xs text-neutral-400">Flow</label>
+					<select id="serial-flow" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs">
+						<option value="none">None</option>
+						<option value="soft">Software</option>
+						<option value="hard">Hardware</option>
+					</select>
+					<label class="text-xs text-neutral-400">Data</label>
+					<select id="serial-databits" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs">
+						<option value="8">8</option>
+						<option value="7">7</option>
+						<option value="6">6</option>
+						<option value="5">5</option>
+					</select>
+					<label class="text-xs text-neutral-400">Stop</label>
+					<select id="serial-stopbits" class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs">
+						<option value="1">1</option>
+						<option value="2">2</option>
+					</select>
+				</div>
+				<div class="flex items-center space-x-2">
+					<span id="conn-status" class="text-xs text-neutral-500">Disconnected</span>
+					<button class="btn btn-green text-xs" onclick="connectSerial()" id="btn-connect">Connect</button>
+					<button class="btn btn-neutral text-xs" onclick="disconnectSerial()" id="btn-disconnect" disabled>Disconnect</button>
+				</div>
+			</div>
+			<!-- Terminal container -->
+			<div id="terminal" class="min-h-0 flex-1 p-1"></div>
+		</div>
+
+		<script type="module">
+			import { Terminal } from 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm';
+			import { FitAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm';
+			import { AttachAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-attach@0.11.0/+esm';
+
+			let term = null;
+			let ws = null;
+			let picocomRunning = false;
+
+			function getWsUrl() {
+				const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+				return proto + '//' + window.location.host;
+			}
+
+			window.connectSerial = function() {
+				if (ws) disconnectSerial();
+
+				term = new Terminal({ cursorBlink: true });
+				const fitAddon = new FitAddon();
+				term.loadAddon(fitAddon);
+				const el = document.getElementById('terminal');
+				el.innerHTML = '';
+				term.open(el);
+				fitAddon.fit();
+
+				const url = getWsUrl() + '/api/vm/terminal';
+				ws = new WebSocket(url);
+				document.getElementById('conn-status').textContent = 'Connecting...';
+				document.getElementById('btn-connect').disabled = true;
+
+				ws.onopen = () => {
+					const attachAddon = new AttachAddon(ws);
+					term.loadAddon(attachAddon);
+					const windowSize = { rows: term.rows, cols: term.cols };
+					ws.send(new Blob([JSON.stringify(windowSize)], { type: 'application/json' }));
+
+					setTimeout(() => {
+						const port = document.getElementById('serial-port').value;
+						const baud = document.getElementById('serial-baud').value;
+						const parity = document.getElementById('serial-parity').value;
+						const flow = document.getElementById('serial-flow').value;
+						const dataBits = document.getElementById('serial-databits').value;
+						const stopBits = document.getElementById('serial-stopbits').value;
+						ws.send(`picocom ${port} --baud ${baud} --parity ${parity} --flow ${flow} --databits ${dataBits} --stopbits ${stopBits}\r`);
+						picocomRunning = true;
+					}, 300);
+
+					document.getElementById('conn-status').textContent = 'Connected';
+					document.getElementById('btn-disconnect').disabled = false;
+				};
+
+				ws.onclose = () => {
+					document.getElementById('conn-status').textContent = 'Disconnected';
+					document.getElementById('btn-connect').disabled = false;
+					document.getElementById('btn-disconnect').disabled = true;
+					picocomRunning = false;
+				};
+
+				ws.onerror = () => {
+					document.getElementById('conn-status').textContent = 'Error';
+					document.getElementById('btn-connect').disabled = false;
+				};
+
+				const resizeHandler = () => {
+					fitAddon.fit();
+					if (ws && ws.readyState === WebSocket.OPEN) {
+						ws.send(new Blob([JSON.stringify({ rows: term.rows, cols: term.cols })], { type: 'application/json' }));
+					}
+				};
+				window.addEventListener('resize', resizeHandler);
+				ws._resizeHandler = resizeHandler;
+			};
+
+			window.disconnectSerial = function() {
+				if (ws && picocomRunning) {
+					ws.send('\x01\x18'); // Ctrl-A, Ctrl-X to exit picocom
+					picocomRunning = false;
+				}
+				setTimeout(() => {
+					if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+					ws = null;
+				}, 100);
+				if (term) { term.dispose(); term = null; }
+			};
+
+			// Auto-connect on page load
+			window.connectSerial();
+		</script>
+	}
+}
+
+// SettingsPage is the server-rendered settings page.
+templ SettingsPage() {
+	@layout("NanoKVM BMC - Settings") {
+		<div class="p-6 space-y-6 max-w-3xl mx-auto">
+			<!-- Network -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">Hostname</h2>
+				<div class="flex items-center space-x-3">
+					<input id="hostname" type="text" class="bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm flex-1" placeholder="nanokvm"/>
+					<button class="btn btn-blue" onclick="setHostname()">Save</button>
+				</div>
+				<p id="hostname-status" class="text-xs text-neutral-500 mt-2"></p>
+			</div>
+
+			<!-- SSH -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">SSH Access</h2>
+				<div class="flex items-center space-x-3">
+					<span id="ssh-state" class="text-sm text-neutral-400">Loading...</span>
+					<button class="btn btn-green" onclick="toggleSSH(true)" id="btn-ssh-enable">Enable</button>
+					<button class="btn btn-red" onclick="toggleSSH(false)" id="btn-ssh-disable">Disable</button>
+				</div>
+			</div>
+
+			<!-- TLS -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">TLS / HTTPS</h2>
+				<div class="flex items-center space-x-3">
+					<button class="btn btn-green" onclick="setTLS(true)">Enable TLS</button>
+					<button class="btn btn-red" onclick="setTLS(false)">Disable TLS</button>
+				</div>
+				<p class="text-xs text-neutral-500 mt-2">Enabling TLS requires a valid certificate and key.</p>
+			</div>
+
+			<!-- mDNS -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">mDNS</h2>
+				<div class="flex items-center space-x-3">
+					<span id="mdns-state" class="text-sm text-neutral-400">Loading...</span>
+					<button class="btn btn-green" onclick="toggleMdns(true)">Enable</button>
+					<button class="btn btn-red" onclick="toggleMdns(false)">Disable</button>
+				</div>
+			</div>
+
+			<!-- Swap -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">Swap File</h2>
+				<div class="flex items-center space-x-3">
+					<span class="text-sm text-neutral-400">Size (MB):</span>
+					<input id="swap-size" type="number" value="0" class="bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm w-24"/>
+					<button class="btn btn-blue" onclick="setSwap()">Save</button>
+				</div>
+				<p id="swap-status" class="text-xs text-neutral-500 mt-2"></p>
+			</div>
+
+			<!-- System -->
+			<div class="card">
+				<h2 class="text-lg font-semibold mb-4">System</h2>
+				<div class="flex items-center space-x-3">
+					<button class="btn btn-red" onclick="if(confirm('Reboot the BMC?')) rebootSystem()">Reboot BMC</button>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			const token = localStorage.getItem('nano-kvm-token') || '';
+			const headers = { 'Content-Type': 'application/json', 'token': token };
+
+			async function apiGet(url) {
+				const r = await fetch(url, { headers: { 'token': token } });
+				return r.json();
+			}
+			async function apiPost(url, body) {
+				const r = await fetch(url, { method: 'POST', headers, body: body ? JSON.stringify(body) : undefined });
+				return r.json();
+			}
+
+			// Load initial state
+			(async function() {
+				try {
+					const h = await apiGet('/api/vm/hostname');
+					if (h.code === 0) document.getElementById('hostname').value = h.data.hostname || '';
+				} catch(e) {}
+
+				try {
+					const s = await apiGet('/api/vm/ssh');
+					document.getElementById('ssh-state').textContent = s.data?.enabled ? 'Enabled' : 'Disabled';
+				} catch(e) {}
+
+				try {
+					const m = await apiGet('/api/vm/mdns');
+					document.getElementById('mdns-state').textContent = m.data?.enabled ? 'Enabled' : 'Disabled';
+				} catch(e) {}
+
+				try {
+					const sw = await apiGet('/api/vm/swap');
+					if (sw.code === 0) document.getElementById('swap-size').value = sw.data?.size || 0;
+				} catch(e) {}
+			})();
+
+			async function setHostname() {
+				const hostname = document.getElementById('hostname').value;
+				const r = await apiPost('/api/vm/hostname', { hostname });
+				document.getElementById('hostname-status').textContent = r.code === 0 ? 'Saved' : 'Failed';
+			}
+
+			async function toggleSSH(enable) {
+				const url = enable ? '/api/vm/ssh/enable' : '/api/vm/ssh/disable';
+				await apiPost(url);
+				document.getElementById('ssh-state').textContent = enable ? 'Enabled' : 'Disabled';
+			}
+
+			async function setTLS(enabled) {
+				await apiPost('/api/vm/tls', { enabled });
+				alert('TLS ' + (enabled ? 'enabled' : 'disabled') + '. Page may reload.');
+			}
+
+			async function toggleMdns(enable) {
+				const url = enable ? '/api/vm/mdns/enable' : '/api/vm/mdns/disable';
+				await apiPost(url);
+				document.getElementById('mdns-state').textContent = enable ? 'Enabled' : 'Disabled';
+			}
+
+			async function setSwap() {
+				const size = parseInt(document.getElementById('swap-size').value) || 0;
+				const r = await apiPost('/api/vm/swap', { size });
+				document.getElementById('swap-status').textContent = r.code === 0 ? 'Saved' : 'Failed';
+			}
+
+			async function rebootSystem() {
+				await apiPost('/api/vm/system/reboot');
+			}
+		</script>
+	}
+}

@@ -1,123 +1,128 @@
 import { useEffect, useState } from 'react';
-import { Splitter } from 'antd';
-import { useAtom, useAtomValue } from 'jotai';
-import { useTranslation } from 'react-i18next';
-import { useMediaQuery } from 'react-responsive';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
-import * as storage from '@/lib/localstorage.ts';
-import { client } from '@/lib/websocket.ts';
-import { picoclawChatOpenAtom } from '@/jotai/picoclaw.ts';
-import { resolutionAtom, videoModeAtom } from '@/jotai/screen.ts';
-import { serialTerminalOpenAtom } from '@/jotai/serial.ts';
 import { Head } from '@/components/head.tsx';
+import {
+  serialConfigAtom,
+  serialConnectCountAtom,
+  serialTerminalOpenAtom
+} from '@/jotai/serial.ts';
+import * as api from '@/api/vm';
 
-import { Keyboard } from './keyboard';
-import { Menu } from './menu';
-import { Mouse } from './mouse';
-import { Notification } from './notification.tsx';
-import { Sidebar as PicoclawSidebar } from './picoclaw';
-import { ActionOverlay } from './picoclaw/action-overlay.tsx';
-import { Screen } from './screen';
 import { SerialTerminalPane } from './serial-terminal-pane';
-import { VirtualKeyboard } from './virtual-keyboard';
 
 export const Desktop = () => {
-  const { t } = useTranslation();
-  const isBigScreen = useMediaQuery({ minWidth: 850 });
-  const [picoclawSidebarWidth, setPicoclawSidebarWidth] = useState(420);
-
-  const [videoMode, setVideoMode] = useAtom(videoModeAtom);
-  const [resolution, setResolution] = useAtom(resolutionAtom);
-  const isPicoclawChatOpen = useAtomValue(picoclawChatOpenAtom);
+  const [serialConfig] = useAtom(serialConfigAtom);
+  const setSerialTerminalOpen = useSetAtom(serialTerminalOpenAtom);
+  const setConnectCount = useSetAtom(serialConnectCountAtom);
   const isSerialTerminalOpen = useAtomValue(serialTerminalOpenAtom);
 
+  const [isPowerOn, setIsPowerOn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
   useEffect(() => {
-    client.connect();
+    setSerialTerminalOpen(true);
+    setConnectCount((c: number) => c + 1);
 
-    const mode = getVideoMode();
-    setVideoMode(mode);
-
-    const res = storage.getResolution() || { width: 0, height: 0 };
-    setResolution(res);
-
-    return () => {
-      client.close();
-    };
+    getLed();
+    const interval = setInterval(getLed, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  function getVideoMode() {
-    const defaultVideoMode = window.RTCPeerConnection ? 'h264' : 'mjpeg';
-
-    const cookieVideoMode = storage.getVideoMode();
-    if (cookieVideoMode) {
-      if (cookieVideoMode === 'direct' && !window.VideoDecoder) {
-        return defaultVideoMode;
-      }
-      return cookieVideoMode;
-    }
-
-    return defaultVideoMode;
+  async function getLed() {
+    try {
+      const rsp = await api.getGpio();
+      if (rsp.code === 0) setIsPowerOn(rsp.data.pwr);
+    } catch (_) {}
   }
 
-  function handleSplitterResize(sizes: number[]) {
-    const nextSidebarWidth = sizes[1];
-    if (typeof nextSidebarWidth === 'number' && nextSidebarWidth > 0) {
-      setPicoclawSidebarWidth(nextSidebarWidth);
-    }
+  async function handlePower(type: string, duration: number) {
+    setIsLoading(true);
+    try {
+      await api.setGpio(type, duration);
+    } catch (_) {}
+    setTimeout(() => {
+      getLed();
+      setIsLoading(false);
+    }, 1500);
+  }
+
+  function reconnectSerial() {
+    setSerialTerminalOpen(true);
+    setConnectCount((c: number) => c + 1);
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-neutral-950">
-      <Head title={t('head.desktop')} />
+    <div className="flex h-screen w-screen flex-col bg-neutral-950 text-white">
+      <Head title="NanoKVM BMC" />
 
-      {isBigScreen && <Notification />}
-
-      {videoMode && resolution && (
-        <div className="relative flex h-full min-h-0 w-full min-w-0">
-          <Menu />
-          <div className="h-full min-h-0 w-full min-w-0">
-            <Splitter
-              className="h-full w-full"
-              style={{ height: '100%', width: '100%' }}
-              onResize={handleSplitterResize}
-            >
-              <Splitter.Panel min="45%">
-                <Splitter layout="vertical" className="h-full w-full">
-                  <Splitter.Panel min={isSerialTerminalOpen ? '30%' : '100%'}>
-                    <div className="relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-black">
-                      <Screen />
-                    </div>
-                  </Splitter.Panel>
-                  {isSerialTerminalOpen && (
-                    <Splitter.Panel defaultSize="35%" min="15%" max="60%">
-                      <SerialTerminalPane />
-                    </Splitter.Panel>
-                  )}
-                </Splitter>
-              </Splitter.Panel>
-              <Splitter.Panel
-                size={isBigScreen && isPicoclawChatOpen ? picoclawSidebarWidth : 0}
-                min={isBigScreen && isPicoclawChatOpen ? 340 : 0}
-                max="45%"
-                resizable={isBigScreen && isPicoclawChatOpen}
-              >
-                {isBigScreen && isPicoclawChatOpen ? <PicoclawSidebar /> : null}
-              </Splitter.Panel>
-            </Splitter>
+      {/* Top bar */}
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-neutral-800 px-4">
+        <div className="flex items-center space-x-4">
+          <span className="text-sm font-semibold text-neutral-200">NanoKVM BMC</span>
+          <div className="flex items-center space-x-2">
+            <div
+              className={`h-2.5 w-2.5 rounded-full ${isPowerOn ? 'bg-green-500' : 'bg-red-500'}`}
+            />
+            <span className="text-xs text-neutral-400">
+              {isPowerOn ? 'Power On' : 'Power Off'}
+            </span>
           </div>
-          <ActionOverlay />
-          <Mouse />
-          <Keyboard />
         </div>
-      )}
 
-      {!isBigScreen && isPicoclawChatOpen ? (
-        <div className="fixed inset-x-0 bottom-0 top-14 z-[980] overflow-hidden bg-[#0d0d0f] shadow-2xl">
-          <PicoclawSidebar />
+        <div className="flex items-center space-x-2">
+          <span className="text-xs text-neutral-500">
+            {serialConfig.port} @ {serialConfig.baudrate}
+          </span>
+          <button
+            className="rounded bg-neutral-700 px-2 py-1 text-xs hover:bg-neutral-600"
+            onClick={reconnectSerial}
+          >
+            Reconnect
+          </button>
+          <div className="mx-2 h-4 w-px bg-neutral-700" />
+          <button
+            disabled={isLoading}
+            className="rounded bg-blue-700 px-2 py-1 text-xs hover:bg-blue-600 disabled:opacity-50"
+            onClick={() => handlePower('power', 800)}
+            title="Short press power button"
+          >
+            Power
+          </button>
+          <button
+            disabled={isLoading}
+            className="rounded bg-yellow-700 px-2 py-1 text-xs hover:bg-yellow-600 disabled:opacity-50"
+            onClick={() => handlePower('reset', 800)}
+            title="Press reset button"
+          >
+            Reset
+          </button>
+          <button
+            disabled={isLoading}
+            className="rounded bg-red-700 px-2 py-1 text-xs hover:bg-red-600 disabled:opacity-50"
+            onClick={() => handlePower('power', 5000)}
+            title="Long press power button (force off)"
+          >
+            Force Off
+          </button>
         </div>
-      ) : null}
+      </div>
 
-      <VirtualKeyboard />
+      {/* Serial terminal — full remaining height */}
+      <div className="min-h-0 flex-1">
+        {isSerialTerminalOpen ? (
+          <SerialTerminalPane />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <button
+              className="rounded bg-neutral-800 px-4 py-2 hover:bg-neutral-700"
+              onClick={reconnectSerial}
+            >
+              Connect Serial Console
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

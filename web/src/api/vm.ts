@@ -24,15 +24,6 @@ export function getGpio() {
   return http.get('/api/vm/gpio');
 }
 
-// update screen arguments
-export function updateScreen(type: string, value: number) {
-  const data = {
-    type,
-    value
-  };
-  return http.post('/api/vm/screen', data);
-}
-
 // get memory limit
 export function getMemoryLimit() {
   return http.get('/api/vm/memory/limit');
@@ -55,34 +46,6 @@ export function getOLED() {
 // set OLED configuration
 export function setOLED(sleep: number) {
   return http.post('/api/vm/oled', { sleep });
-}
-
-// reset HDMI
-export function resetHdmi() {
-  return http.post('/api/vm/hdmi/reset');
-}
-
-// get HDMI state
-export function getHdmiState() {
-  return http.get('/api/vm/hdmi');
-}
-
-// enable HDMI
-export function enableHdmi() {
-  return http.post('/api/vm/hdmi/enable');
-}
-
-// disable HDMI
-export function disableHdmi() {
-  return http.post('/api/vm/hdmi/disable');
-}
-
-// set HDMI state
-export function setHdmiState(enabled: boolean) {
-  if (enabled) {
-    return enableHdmi();
-  }
-  return disableHdmi();
 }
 
 // get SSH state
@@ -108,16 +71,6 @@ export function getSwap() {
 // set swap file size
 export function setSwap(size: number) {
   return http.post('/api/vm/swap', { size });
-}
-
-// get mouse jiggler
-export function getMouseJiggler() {
-  return http.get('/api/vm/mouse-jiggler');
-}
-
-// set mouse jiggler
-export function setMouseJiggler(enabled: boolean, mode: string) {
-  return http.post('/api/vm/mouse-jiggler', { enabled, mode });
 }
 
 // get Hostname

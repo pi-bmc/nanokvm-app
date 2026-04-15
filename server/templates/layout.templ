@@ -1,0 +1,84 @@
+package templates
+
+// layout renders the common HTML document shell for BMC pages.
+// Includes Tailwind CSS via CDN and a dark theme base.
+templ layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en" class="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<link rel="icon" type="image/svg+xml" href="/sipeed.ico"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			<script src="https://cdn.tailwindcss.com"></script>
+			<style>
+				body { background: #0a0a0a; color: #e5e5e5; font-family: system-ui, -apple-system, sans-serif; }
+				.card { background: #171717; border: 1px solid #262626; border-radius: 0.5rem; padding: 1.5rem; }
+				.btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; cursor: pointer; transition: background 0.15s; }
+				.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+				.btn-blue { background: #1d4ed8; color: white; }
+				.btn-blue:hover:not(:disabled) { background: #2563eb; }
+				.btn-red { background: #b91c1c; color: white; }
+				.btn-red:hover:not(:disabled) { background: #dc2626; }
+				.btn-yellow { background: #a16207; color: white; }
+				.btn-yellow:hover:not(:disabled) { background: #ca8a04; }
+				.btn-green { background: #15803d; color: white; }
+				.btn-green:hover:not(:disabled) { background: #16a34a; }
+				.btn-neutral { background: #404040; color: white; }
+				.btn-neutral:hover:not(:disabled) { background: #525252; }
+				.status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+				.status-on { background: #22c55e; }
+				.status-off { background: #ef4444; }
+				nav a { color: #a3a3a3; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; }
+				nav a:hover { background: #262626; color: #e5e5e5; }
+				nav a.active { background: #1d4ed8; color: white; }
+			</style>
+		</head>
+		<body>
+			<div class="flex h-screen flex-col">
+				<header class="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
+					<div class="flex items-center space-x-4">
+						<span class="text-lg font-bold">NanoKVM BMC</span>
+						<div id="power-indicator" class="flex items-center space-x-2">
+							<span class="status-dot status-off" id="power-dot"></span>
+							<span class="text-xs text-neutral-400" id="power-text">Checking...</span>
+						</div>
+					</div>
+					<nav class="flex items-center space-x-1">
+						<a href="/" id="nav-dashboard">Dashboard</a>
+						<a href="/console" id="nav-console">Serial Console</a>
+						<a href="/settings" id="nav-settings">Settings</a>
+					</nav>
+				</header>
+				<main class="min-h-0 flex-1 overflow-auto">
+					{ children... }
+				</main>
+			</div>
+			<script>
+				// Poll power LED state
+				async function pollPower() {
+					try {
+						const token = localStorage.getItem('nano-kvm-token') || '';
+						const r = await fetch('/api/vm/gpio', { headers: { 'token': token } });
+						const data = await r.json();
+						const dot = document.getElementById('power-dot');
+						const text = document.getElementById('power-text');
+						if (data.code === 0) {
+							const on = data.data.pwr;
+							dot.className = 'status-dot ' + (on ? 'status-on' : 'status-off');
+							text.textContent = on ? 'Power On' : 'Power Off';
+						}
+					} catch(e) {}
+				}
+				pollPower();
+				setInterval(pollPower, 5000);
+
+				// Highlight active nav link
+				const path = window.location.pathname;
+				document.querySelectorAll('nav a').forEach(a => {
+					if (a.getAttribute('href') === path) a.classList.add('active');
+				});
+			</script>
+		</body>
+	</html>
+}

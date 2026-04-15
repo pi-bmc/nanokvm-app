@@ -10,6 +10,9 @@ type Config struct {
 	Stun           string   `yaml:"stun"`
 	Turn           Turn     `yaml:"turn"`
 	Security       Security `yaml:"security"`
+	IPMI           IPMI     `yaml:"ipmi"`
+	Redfish        Redfish  `yaml:"redfish"`
+	Serial         Serial   `yaml:"serial"`
 
 	Hardware Hardware `yaml:"-"`
 }
@@ -52,4 +55,22 @@ type Hardware struct {
 	GPIOPower    string    `yaml:"-"`
 	GPIOPowerLED string    `yaml:"-"`
 	GPIOHDDLed   string    `yaml:"-"`
+}
+
+type IPMI struct {
+	Enabled bool `yaml:"enabled"`
+	Port    int  `yaml:"port"`
+}
+
+type Redfish struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type Serial struct {
+	Device      string `yaml:"device"`
+	BaudRate    int    `yaml:"baudRate"`
+	Parity      string `yaml:"parity"`
+	DataBits    int    `yaml:"dataBits"`
+	StopBits    int    `yaml:"stopBits"`
+	FlowControl string `yaml:"flowControl"`
 }

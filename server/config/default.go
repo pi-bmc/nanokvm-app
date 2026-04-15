@@ -30,6 +30,21 @@ var defaultConfig = &Config{
 		LoginLockoutDuration: 0,
 		LoginMaxFailures:     5,
 	},
+	IPMI: IPMI{
+		Enabled: true,
+		Port:    623,
+	},
+	Redfish: Redfish{
+		Enabled: true,
+	},
+	Serial: Serial{
+		Device:      "/dev/ttyS1",
+		BaudRate:    115200,
+		Parity:      "none",
+		DataBits:    8,
+		StopBits:    1,
+		FlowControl: "none",
+	},
 }
 
 func checkDefaultValue() {

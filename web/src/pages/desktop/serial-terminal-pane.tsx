@@ -2,23 +2,17 @@ import { useCallback, useEffect, useRef } from 'react';
 import { AttachAddon } from '@xterm/addon-attach';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal as XtermTerminal } from '@xterm/xterm';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { XIcon } from 'lucide-react';
+import { useAtomValue } from 'jotai';
 
 import '@xterm/xterm/css/xterm.css';
 
 import { getBaseUrl } from '@/lib/service.ts';
-import {
-  serialConfigAtom,
-  serialConnectCountAtom,
-  serialTerminalOpenAtom
-} from '@/jotai/serial.ts';
+import { serialConfigAtom, serialConnectCountAtom } from '@/jotai/serial.ts';
 import { validatePicocomParameters } from '@/pages/terminal/validater.ts';
 
 export const SerialTerminalPane = () => {
   const config = useAtomValue(serialConfigAtom);
   const connectCount = useAtomValue(serialConnectCountAtom);
-  const setOpen = useSetAtom(serialTerminalOpenAtom);
 
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XtermTerminal | null>(null);
@@ -102,17 +96,6 @@ export const SerialTerminalPane = () => {
 
   return (
     <div className="flex h-full flex-col bg-neutral-950">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-1.5">
-        <span className="text-sm text-neutral-300">
-          Serial: {config.port} @ {config.baudrate}
-        </span>
-        <button
-          className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-          onClick={() => setOpen(false)}
-        >
-          <XIcon size={14} />
-        </button>
-      </div>
       <div ref={termRef} className="min-h-0 flex-1 p-2" />
     </div>
   );

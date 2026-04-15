@@ -1,9 +1,9 @@
-import { createHashRouter } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 
 import { ProtectedRoute } from '@/components/auth';
 import { Root } from '@/components/root';
 
-export const router = createHashRouter([
+export const router = createBrowserRouter([
   {
     path: '/auth/login',
     lazy: async () => {
@@ -27,13 +27,6 @@ export const router = createHashRouter([
         }
       },
       {
-        path: 'terminal',
-        lazy: async () => {
-          const { Terminal } = await import('./pages/terminal');
-          return { Component: Terminal };
-        }
-      },
-      {
         path: 'auth/password',
         lazy: async () => {
           const { Password } = await import('./pages/auth/password');
@@ -41,13 +34,5 @@ export const router = createHashRouter([
         }
       }
     ]
-  },
-  {
-    path: '/wifi',
-    caseSensitive: false,
-    lazy: async () => {
-      const { Wifi } = await import('./pages/wifi');
-      return { Component: Wifi };
-    }
   }
 ]);

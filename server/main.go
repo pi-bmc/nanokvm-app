@@ -6,15 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"NanoKVM-Server/common"
 	"NanoKVM-Server/config"
+	"NanoKVM-Server/gintemplrenderer"
 	"NanoKVM-Server/logger"
 	"NanoKVM-Server/middleware"
 	"NanoKVM-Server/router"
-	"NanoKVM-Server/service/vm/jiggler"
-	"NanoKVM-Server/utils"
+	"NanoKVM-Server/service/ipmi"
 
 	"github.com/gin-gonic/gin"
 	cors "github.com/rs/cors/wrapper/gin"
@@ -30,19 +28,8 @@ func main() {
 func initialize() {
 	logger.Init()
 
-	// init screen parameters
-	_ = common.GetScreen()
-
-	// init HDMI
-	vision := common.GetKvmVision()
-	vision.SetHDMI(false)
-	time.Sleep(10 * time.Millisecond)
-	if !utils.IsHdmiDisabled() {
-		vision.SetHDMI(true)
-	}
-
-	// run mouse jiggler
-	jiggler.GetJiggler().Run()
+	// Start IPMI server on standard port 623
+	go ipmi.Start(623)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -64,6 +51,10 @@ func run() {
 	if conf.Authentication == "disable" {
 		r.Use(cors.AllowAll())
 	}
+
+	// Configure templ renderer with fallback to Gin's default HTML renderer.
+	ginHtmlRenderer := r.HTMLRender
+	r.HTMLRender = &gintemplrenderer.HTMLTemplRenderer{FallbackHtmlRenderer: ginHtmlRenderer}
 
 	router.Init(r)
 
@@ -94,5 +85,5 @@ func run() {
 }
 
 func dispose() {
-	common.GetKvmVision().Close()
+	ipmi.Stop()
 }
