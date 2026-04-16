@@ -364,11 +364,12 @@ templ DashboardPage() {
 							<span id="conn-status" class="label" style="color:#ef4444">● Disconnected</span>
 						</div>
 						<div class="controls">
-							<button class="toolbar-btn" onclick="connectSerial()" id="btn-connect">Connect</button>
-							<button class="toolbar-btn" onclick="disconnectSerial()" id="btn-disconnect" disabled>Disconnect</button>
+							<button class="toolbar-btn" id="btn-serial-toggle" onclick="toggleSerialConnection()" style="border-color:#15803d; color:#22c55e">
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+								Connect
+							</button>
 							<button class="toolbar-btn" onclick="toggleExpand()" id="btn-expand" title="Expand console">
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-								Expand
+								<svg id="expand-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
 							</button>
 							<button class="toolbar-btn" onclick="toggleFullscreen()" id="btn-fullscreen" title="Fullscreen">
 								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
@@ -400,6 +401,29 @@ templ DashboardPage() {
 				return proto + '//' + window.location.host;
 			}
 
+			let serialConnected = false;
+
+			function updateSerialToggleBtn() {
+				const btn = document.getElementById('btn-serial-toggle');
+				if (serialConnected) {
+					btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Disconnect';
+					btn.style.borderColor = '#b91c1c';
+					btn.style.color = '#ef4444';
+				} else {
+					btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg> Connect';
+					btn.style.borderColor = '#15803d';
+					btn.style.color = '#22c55e';
+				}
+			}
+
+			window.toggleSerialConnection = function() {
+				if (serialConnected) {
+					disconnectSerial();
+				} else {
+					connectSerial();
+				}
+			};
+
 			window.connectSerial = function() {
 				if (ws) disconnectSerial();
 
@@ -415,27 +439,32 @@ templ DashboardPage() {
 				ws = new WebSocket(url);
 				document.getElementById('conn-status').textContent = '● Connecting...';
 				document.getElementById('conn-status').style.color = '#a16207';
-				document.getElementById('btn-connect').disabled = true;
+				document.getElementById('btn-serial-toggle').disabled = true;
 
 				ws.onopen = () => {
 					const attachAddon = new AttachAddon(ws);
 					term.loadAddon(attachAddon);
 					document.getElementById('conn-status').textContent = '● Connected';
 					document.getElementById('conn-status').style.color = '#22c55e';
-					document.getElementById('btn-disconnect').disabled = false;
+					serialConnected = true;
+					document.getElementById('btn-serial-toggle').disabled = false;
+					updateSerialToggleBtn();
 				};
 
 				ws.onclose = () => {
 					document.getElementById('conn-status').textContent = '● Disconnected';
 					document.getElementById('conn-status').style.color = '#ef4444';
-					document.getElementById('btn-connect').disabled = false;
-					document.getElementById('btn-disconnect').disabled = true;
+					serialConnected = false;
+					document.getElementById('btn-serial-toggle').disabled = false;
+					updateSerialToggleBtn();
 				};
 
 				ws.onerror = () => {
 					document.getElementById('conn-status').textContent = '● Error';
 					document.getElementById('conn-status').style.color = '#ef4444';
-					document.getElementById('btn-connect').disabled = false;
+					serialConnected = false;
+					document.getElementById('btn-serial-toggle').disabled = false;
+					updateSerialToggleBtn();
 				};
 
 				resizeHandler = () => { if (fitAddon) fitAddon.fit(); };
@@ -451,13 +480,17 @@ templ DashboardPage() {
 			};
 
 			// Expand: console takes full viewport (within the SPA layout)
+			const expandSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+			const collapseSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+
 			window.toggleExpand = function() {
 				const pane = document.getElementById('console-pane');
 				const btn = document.getElementById('btn-expand');
 				pane.classList.toggle('expanded');
 				const isExpanded = pane.classList.contains('expanded');
-				btn.textContent = isExpanded ? 'Collapse' : 'Expand';
+				btn.innerHTML = isExpanded ? collapseSvg : expandSvg;
 				btn.classList.toggle('active', isExpanded);
+				btn.title = isExpanded ? 'Collapse console' : 'Expand console';
 				// Hide info bar when expanded
 				document.querySelector('.info-bar').style.display = isExpanded ? 'none' : '';
 				document.querySelector('header').style.display = isExpanded ? 'none' : '';
@@ -483,7 +516,8 @@ templ DashboardPage() {
 					pane.classList.remove('expanded');
 					document.querySelector('.info-bar').style.display = '';
 					document.querySelector('header').style.display = '';
-					document.getElementById('btn-expand').textContent = 'Expand';
+					document.getElementById('btn-expand').innerHTML = expandSvg;
+					document.getElementById('btn-expand').title = 'Expand console';
 					document.getElementById('btn-expand').classList.remove('active');
 					setTimeout(() => { if (fitAddon) fitAddon.fit(); }, 50);
 				}

@@ -132,29 +132,18 @@ templ layout(title string) {
 									</div>
 									<div class="dropdown-row">
 										<label>SSH</label>
-										<div class="flex items-center gap-1">
-											<span id="ssh-state" class="text-xs text-neutral-500">...</span>
-											<button class="toggle-btn toggle-on" onclick="toggleSSH(true)">On</button>
-											<button class="toggle-btn toggle-off" onclick="toggleSSH(false)">Off</button>
-										</div>
+										<button id="ssh-toggle" class="toggle-btn toggle-off" onclick="toggleSSH()">Off</button>
 									</div>
 									<div class="dropdown-row">
 										<label>mDNS</label>
-										<div class="flex items-center gap-1">
-											<span id="mdns-state" class="text-xs text-neutral-500">...</span>
-											<button class="toggle-btn toggle-on" onclick="toggleMdns(true)">On</button>
-											<button class="toggle-btn toggle-off" onclick="toggleMdns(false)">Off</button>
-										</div>
+										<button id="mdns-toggle" class="toggle-btn toggle-off" onclick="toggleMdns()">Off</button>
 									</div>
 								</div>
 								<div class="dropdown-section">
 									<div class="dropdown-section-label">Security</div>
 									<div class="dropdown-row">
 										<label>TLS / HTTPS</label>
-										<div class="flex items-center gap-1">
-											<button class="toggle-btn toggle-on" onclick="setTLS(true)">On</button>
-											<button class="toggle-btn toggle-off" onclick="setTLS(false)">Off</button>
-										</div>
+										<button id="tls-toggle" class="toggle-btn toggle-off" onclick="toggleTLS()">Off</button>
 									</div>
 									<button class="dropdown-item" onclick="window.location.href='/auth/password'">
 										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -267,17 +256,35 @@ templ layout(title string) {
 					const hostname = document.getElementById('hostname').value;
 					await apiPost('/api/vm/hostname', { hostname });
 				}
-				async function toggleSSH(enable) {
+				function updateToggle(id, on) {
+					const btn = document.getElementById(id);
+					if (!btn) return;
+					btn.textContent = on ? 'On' : 'Off';
+					btn.className = 'toggle-btn ' + (on ? 'toggle-on' : 'toggle-off');
+				}
+
+				let sshEnabled = false;
+				let mdnsEnabled = false;
+				let tlsEnabled = false;
+
+				async function toggleSSH() {
+					const enable = !sshEnabled;
 					await apiPost(enable ? '/api/vm/ssh/enable' : '/api/vm/ssh/disable');
-					document.getElementById('ssh-state').textContent = enable ? 'On' : 'Off';
+					sshEnabled = enable;
+					updateToggle('ssh-toggle', sshEnabled);
 				}
-				async function setTLS(enabled) {
-					await apiPost('/api/vm/tls', { enabled });
-					alert('TLS ' + (enabled ? 'enabled' : 'disabled') + '. Page may reload.');
+				async function toggleTLS() {
+					const enable = !tlsEnabled;
+					await apiPost('/api/vm/tls', { enabled: enable });
+					tlsEnabled = enable;
+					updateToggle('tls-toggle', tlsEnabled);
+					alert('TLS ' + (enable ? 'enabled' : 'disabled') + '. Page may reload.');
 				}
-				async function toggleMdns(enable) {
+				async function toggleMdns() {
+					const enable = !mdnsEnabled;
 					await apiPost(enable ? '/api/vm/mdns/enable' : '/api/vm/mdns/disable');
-					document.getElementById('mdns-state').textContent = enable ? 'On' : 'Off';
+					mdnsEnabled = enable;
+					updateToggle('mdns-toggle', mdnsEnabled);
 				}
 				async function setSwap() {
 					const size = parseInt(document.getElementById('swap-size').value) || 0;
@@ -290,8 +297,8 @@ templ layout(title string) {
 				// Load initial settings state
 				(async function() {
 					try { const h = await apiGet('/api/vm/hostname'); if (h.code === 0) document.getElementById('hostname').value = h.data.hostname || ''; } catch(e) {}
-					try { const s = await apiGet('/api/vm/ssh'); document.getElementById('ssh-state').textContent = s.data?.enabled ? 'On' : 'Off'; } catch(e) {}
-					try { const m = await apiGet('/api/vm/mdns'); document.getElementById('mdns-state').textContent = m.data?.enabled ? 'On' : 'Off'; } catch(e) {}
+					try { const s = await apiGet('/api/vm/ssh'); sshEnabled = !!(s.data?.enabled); updateToggle('ssh-toggle', sshEnabled); } catch(e) {}
+					try { const m = await apiGet('/api/vm/mdns'); mdnsEnabled = !!(m.data?.enabled); updateToggle('mdns-toggle', mdnsEnabled); } catch(e) {}
 					try { const sw = await apiGet('/api/vm/swap'); if (sw.code === 0) document.getElementById('swap-size').value = sw.data?.size || 0; } catch(e) {}
 				})();
 
