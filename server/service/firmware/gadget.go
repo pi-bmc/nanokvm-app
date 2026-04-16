@@ -20,26 +20,31 @@ const (
 )
 
 // presentImage writes the firmware image path to the USB mass storage gadget
-// configfs and resets the UDC so the host re-enumerates. Must be called with c.mu held.
+// configfs and triggers a re-enumeration if needed. Must be called with c.mu held.
 func (c *Controller) presentImage() error {
 	if c.presented {
 		return nil
 	}
 
 	// Ensure not in cdrom or read-only mode.
-	_ = os.WriteFile(gadgetFilePath, []byte("\n"), 0o666)
 	_ = os.WriteFile(gadgetCdromPath, []byte("0"), 0o666)
 	_ = os.WriteFile(gadgetROPath, []byte("0"), 0o666)
 
 	inquiry := fmt.Sprintf("%-8s%-16s%04x", "NanoKVM", "Firmware", 0x0100)
 	_ = os.WriteFile(gadgetInquiry, []byte(inquiry), 0o666)
 
+	// Set the backing file. Clear it first so the kernel re-reads.
+	_ = os.WriteFile(gadgetFilePath, []byte(""), 0o666)
 	if err := os.WriteFile(gadgetFilePath, []byte(c.imagePath), 0o666); err != nil {
 		return fmt.Errorf("write gadget file: %w", err)
 	}
 
-	if err := resetUDC(); err != nil {
-		return fmt.Errorf("reset UDC: %w", err)
+	// Only reset the UDC if it is not currently bound. If already bound,
+	// the kernel picks up the LUN file change automatically.
+	if !udcBound() {
+		if err := resetUDC(); err != nil {
+			return fmt.Errorf("reset UDC: %w", err)
+		}
 	}
 
 	c.presented = true
@@ -53,7 +58,7 @@ func (c *Controller) unpresentImage() error {
 		return nil
 	}
 
-	if err := os.WriteFile(gadgetFilePath, []byte("\n"), 0o666); err != nil {
+	if err := os.WriteFile(gadgetFilePath, []byte(""), 0o666); err != nil {
 		return fmt.Errorf("clear gadget file: %w", err)
 	}
 
@@ -82,7 +87,7 @@ func resetUDC() error {
 		return fmt.Errorf("clear UDC: %w", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// Re-assign UDC.
 	cmd := exec.Command("sh", "-c", "ls /sys/class/udc/ | head -1")
@@ -101,4 +106,14 @@ func resetUDC() error {
 	}
 
 	return nil
+}
+
+// udcBound returns true if the gadget UDC file contains a non-empty value,
+// meaning a UDC controller is already bound.
+func udcBound() bool {
+	data, err := os.ReadFile(gadgetUDC)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(data)) != ""
 }
