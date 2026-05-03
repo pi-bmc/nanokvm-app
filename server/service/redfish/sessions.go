@@ -64,10 +64,10 @@ func (s *Service) CreateSession(c *gin.Context) {
 
 func (s *Service) GetSessionCollection(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#SessionCollection.SessionCollection",
-		"@odata.id":      "/redfish/v1/SessionService/Sessions",
-		"@odata.context": "/redfish/v1/$metadata#SessionCollection.SessionCollection",
-		"Name":           "Session Collection",
+		"@odata.type":         "#SessionCollection.SessionCollection",
+		"@odata.id":           "/redfish/v1/SessionService/Sessions",
+		"@odata.context":      "/redfish/v1/$metadata#SessionCollection.SessionCollection",
+		"Name":                "Session Collection",
 		"Members@odata.count": 0,
 		"Members":             []gin.H{},
 	})

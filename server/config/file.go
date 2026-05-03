@@ -34,7 +34,7 @@ func Write(conf *Config) error {
 		return err
 	}
 
-	err = os.WriteFile(ConfigurationFile, data, 0644)
+	err = os.WriteFile(ConfigurationFile, data, 0o644)
 	if err != nil {
 		log.Errorf("failed to write config: %v", err)
 		return err

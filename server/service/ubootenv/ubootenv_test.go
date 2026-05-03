@@ -182,9 +182,9 @@ func TestGetSetDelete(t *testing.T) {
 
 func TestGetBootTargets(t *testing.T) {
 	tests := []struct {
-		name   string
-		env    *Env
-		want   []string
+		name    string
+		env     *Env
+		want    []string
 		wantNil bool
 	}{
 		{

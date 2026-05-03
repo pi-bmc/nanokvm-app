@@ -1,6 +1,7 @@
 package application
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -96,7 +97,7 @@ func processUpload(reader *multipart.Reader, contentLength int64) (string, error
 
 	for {
 		part, err := reader.NextPart()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

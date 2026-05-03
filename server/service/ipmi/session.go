@@ -216,8 +216,8 @@ func (sm *sessionManager) handleOpenSessionReq(data []byte, addr *net.UDPAddr, s
 	consoleSessionID := binary.LittleEndian.Uint32(data[4:8])
 
 	// Parse algorithms from the three 8-byte payload blocks starting at offset 8.
-	authAlgo := data[12]  // auth payload algorithm
-	integAlgo := data[20] // integrity payload algorithm
+	authAlgo := data[12]   // auth payload algorithm
+	integAlgo := data[20]  // integrity payload algorithm
 	confidAlgo := data[28] // confidentiality payload algorithm
 
 	sess := sm.newSession()

@@ -94,7 +94,6 @@ func server(r *gin.Engine) {
 	applicationRouter(r)
 	vmRouter(r)
 	networkRouter(r)
-	wsRouter(r)
 	redfishRouter(r)
 	firmwareRouter(r)
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func UnTarGz(srcFile string, destDir string) (string, error) {
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", err
 	}
 

@@ -75,7 +75,7 @@ func GenerateCert() error {
 	log.Debugf("%s generated", certFile)
 
 	// generate private key
-	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) // 权限 0600
+	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // 权限 0600
 	if err != nil {
 		log.Errorf("failed to create %s: %v", keyFile, err)
 		return err

@@ -12,8 +12,8 @@ type Config struct {
 	Security       Security `yaml:"security"`
 	IPMI           IPMI     `yaml:"ipmi"`
 	Redfish        Redfish  `yaml:"redfish"`
-	Serial   Serial   `yaml:"serial"`
-	Firmware Firmware `yaml:"firmware"`
+	Serial         Serial   `yaml:"serial"`
+	Firmware       Firmware `yaml:"firmware"`
 
 	Hardware Hardware `yaml:"-"`
 }

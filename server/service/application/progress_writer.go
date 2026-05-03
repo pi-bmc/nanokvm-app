@@ -13,7 +13,7 @@ import (
 const (
 	sentinelPath       = "/tmp/.download_in_progress"
 	tickerInterval     = 2500 * time.Millisecond
-	sentinelPermission = 0644
+	sentinelPermission = 0o644
 )
 
 // progressWriter wraps an io.Writer to track and report upload progress.

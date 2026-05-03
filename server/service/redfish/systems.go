@@ -20,10 +20,10 @@ var validBootTargets = map[string]bool{
 
 func (s *Service) GetSystemCollection(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#ComputerSystemCollection.ComputerSystemCollection",
-		"@odata.id":      "/redfish/v1/Systems",
-		"@odata.context": "/redfish/v1/$metadata#ComputerSystemCollection.ComputerSystemCollection",
-		"Name":           "Computer System Collection",
+		"@odata.type":         "#ComputerSystemCollection.ComputerSystemCollection",
+		"@odata.id":           "/redfish/v1/Systems",
+		"@odata.context":      "/redfish/v1/$metadata#ComputerSystemCollection.ComputerSystemCollection",
+		"Name":                "Computer System Collection",
 		"Members@odata.count": 1,
 		"Members": []gin.H{
 			{"@odata.id": "/redfish/v1/Systems/1"},

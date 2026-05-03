@@ -11,7 +11,7 @@ const (
 )
 
 func PersistHDMIDisabled() {
-	f, err := os.OpenFile(HDMIDisableFile, os.O_CREATE|os.O_RDONLY, 0644)
+	f, err := os.OpenFile(HDMIDisableFile, os.O_CREATE|os.O_RDONLY, 0o644)
 	if err != nil {
 		log.Error("failed to create hdmi disable file:", err)
 		return

@@ -21,10 +21,10 @@ type serialPatchRequest struct {
 
 func (s *Service) GetSerialInterfaceCollection(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#SerialInterfaceCollection.SerialInterfaceCollection",
-		"@odata.id":      "/redfish/v1/Managers/1/SerialInterfaces",
-		"@odata.context": "/redfish/v1/$metadata#SerialInterfaceCollection.SerialInterfaceCollection",
-		"Name":           "Serial Interface Collection",
+		"@odata.type":         "#SerialInterfaceCollection.SerialInterfaceCollection",
+		"@odata.id":           "/redfish/v1/Managers/1/SerialInterfaces",
+		"@odata.context":      "/redfish/v1/$metadata#SerialInterfaceCollection.SerialInterfaceCollection",
+		"Name":                "Serial Interface Collection",
 		"Members@odata.count": 1,
 		"Members": []gin.H{
 			{"@odata.id": "/redfish/v1/Managers/1/SerialInterfaces/1"},
