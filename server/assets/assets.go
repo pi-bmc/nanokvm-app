@@ -3,6 +3,8 @@ package assets
 
 import "embed"
 
+//go:generate go run ../../tools/tailwindcss -i css/input.css -o css/output.css --minify
+
 // CSS contains embedded CSS files (Tailwind output, xterm).
 //
 //go:embed css/output.css css/xterm.min.css

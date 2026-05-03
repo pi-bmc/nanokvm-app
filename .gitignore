@@ -31,3 +31,4 @@ kvmapp/server/dl_lib
 kvmapp/kvm_system/kvm_system
 
 dist
+bin
