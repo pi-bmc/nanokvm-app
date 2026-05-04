@@ -39,10 +39,22 @@ func (c *Controller) presentImage() error {
 	inquiry := fmt.Sprintf("%-8s%-16s%04x", "NanoKVM", "Firmware", 0x0100)
 	_ = os.WriteFile(gadgetInquiry, []byte(inquiry), 0o666)
 
-	// Clear first, then set to the image file path.
+	// Clear first, then set to the image file path. Retry on EBUSY because
+	// a just-detached loop device or in-flight gadget I/O can briefly hold
+	// the backing file.
 	_ = os.WriteFile(gadgetFilePath, []byte(""), 0o666)
-	if err := os.WriteFile(gadgetFilePath, []byte(c.imagePath), 0o666); err != nil {
-		return fmt.Errorf("write gadget file: %w", err)
+	var lastErr error
+	for i := 0; i < 10; i++ {
+		if err := os.WriteFile(gadgetFilePath, []byte(c.imagePath), 0o666); err == nil {
+			lastErr = nil
+			break
+		} else {
+			lastErr = err
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	if lastErr != nil {
+		return fmt.Errorf("write gadget file: %w", lastErr)
 	}
 
 	// Only reset the UDC if it is not currently bound. If already bound,
@@ -59,6 +71,8 @@ func (c *Controller) presentImage() error {
 }
 
 // unpresentImage removes the image from the USB gadget. Must be called with c.mu held.
+// After this returns, the image file is no longer held by the kernel's
+// f_mass_storage and is safe to mount via loop device.
 func (c *Controller) unpresentImage() error {
 	if !c.presented {
 		return nil
@@ -67,6 +81,9 @@ func (c *Controller) unpresentImage() error {
 	if err := os.WriteFile(gadgetFilePath, []byte(""), 0o666); err != nil {
 		return fmt.Errorf("clear gadget file: %w", err)
 	}
+
+	// Give the kernel a moment to drop its hold on the backing file.
+	time.Sleep(100 * time.Millisecond)
 
 	c.presented = false
 	log.Info("firmware: unpresented USB gadget")

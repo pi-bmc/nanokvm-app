@@ -29,6 +29,10 @@ help:
 	@echo "  - Must not run as root user"
 
 # Generate Go code from templ templates
+format:
+	@echo "Formatting code..."
+	golangci-lint fmt ./...
+
 generate:
 	@echo "Generating code..."
 	go generate ./...
@@ -46,7 +50,7 @@ dist/fw_env/fw_env:
 	@CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -o ./dist/fw_env/fw_env ./cmd/fw_env
 
 # Build Go application (generates first)
-app: generate clean
+app: generate clean format
 	@echo "Building app..."
 	$(MAKE) dist/server/NanoKVM-Server
 

@@ -1,14 +1,8 @@
 package firmware
 
-// download.go implements the bootstrap flow:
-//   - Download the upstream U-Boot image (xz-compressed) to a staging file.
-//   - Extract its FAT root files into c.firmwareDir via go-diskfs.
-//   - Discard the staging image.
-//   - Build a fresh image at c.imagePath from c.firmwareDir.
-//
-// After bootstrap, c.firmwareDir is the source of truth — individual files
-// (u-boot.bin, config.txt, *.elf, *.dtb, overlays/) can be updated and the
-// image rebuilt without re-downloading.
+// download.go fetches the upstream U-Boot image (xz-compressed) and writes
+// it directly to c.imagePath. No on-the-fly image construction is performed:
+// the downloaded image is the canonical bootable artefact, byte-for-byte.
 
 import (
 	"fmt"
@@ -23,17 +17,38 @@ import (
 
 const downloadSentinel = "/tmp/.firmware_download_in_progress"
 
-// Bootstrap downloads the upstream image, extracts its FAT root files into
-// c.firmwareDir, then builds a fresh boot image. Idempotent: if c.firmwareDir
-// already has files, this re-downloads and overwrites them.
+// Bootstrap downloads the upstream image (and decompresses if .xz) to
+// c.imagePath. Idempotent: overwrites any existing image.
 func (c *Controller) Bootstrap() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.bootstrapLocked()
+	return c.downloadImageLocked()
 }
 
-func (c *Controller) bootstrapLocked() error {
-	// Prevent concurrent downloads.
+// DownloadAndInit bootstraps from the upstream image, then presents via gadget.
+func (c *Controller) DownloadAndInit() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.downloadImageLocked(); err != nil {
+		return err
+	}
+	if err := c.presentImage(); err != nil {
+		log.Warnf("firmware: USB gadget present failed: %v", err)
+	}
+	return nil
+}
+
+// IsDownloading returns true if a download is in progress.
+func (c *Controller) IsDownloading() bool {
+	_, err := os.Stat(downloadSentinel)
+	return err == nil
+}
+
+// downloadImageLocked downloads c.imageURL to c.imagePath. Must hold c.mu.
+// Unpresents the gadget for the duration so writes to c.imagePath don't
+// race with the gadget's view of the file.
+func (c *Controller) downloadImageLocked() error {
 	if _, err := os.Stat(downloadSentinel); err == nil {
 		return fmt.Errorf("download already in progress")
 	}
@@ -42,15 +57,31 @@ func (c *Controller) bootstrapLocked() error {
 	}
 	defer os.Remove(downloadSentinel)
 
-	if c.firmwareDir == "" {
-		return fmt.Errorf("firmwareDir not configured")
+	if c.imageURL == "" {
+		return fmt.Errorf("imageURL not configured")
 	}
-	if err := os.MkdirAll(c.firmwareDir, 0o755); err != nil {
-		return fmt.Errorf("create firmware dir: %w", err)
+	if err := os.MkdirAll(filepath.Dir(c.imagePath), 0o755); err != nil {
+		return fmt.Errorf("create image dir: %w", err)
 	}
 
-	// Stage download next to the firmware dir.
-	stageDir := filepath.Join(filepath.Dir(c.firmwareDir), "stage")
+	// Release any gadget hold on the existing image.
+	wasPresented := c.presented
+	if wasPresented {
+		if err := c.unpresentImage(); err != nil {
+			log.Warnf("firmware: pre-download unpresent failed: %v", err)
+		}
+	}
+
+	// Detach the persistent loop device so the inode is replaced cleanly.
+	hadLoop := c.loopDev != ""
+	if hadLoop {
+		if err := c.detachLoopLocked(); err != nil {
+			log.Warnf("firmware: pre-download loop detach: %v", err)
+		}
+	}
+	c.invalidateEnvCacheLocked()
+
+	stageDir := filepath.Join(filepath.Dir(c.imagePath), "stage")
 	if err := os.MkdirAll(stageDir, 0o755); err != nil {
 		return fmt.Errorf("create stage dir: %w", err)
 	}
@@ -71,40 +102,28 @@ func (c *Controller) bootstrapLocked() error {
 		return fmt.Errorf("decompress: %w", err)
 	}
 
-	log.Info("firmware: extracting FAT root into firmware dir")
-	if err := extractImageToFirmwareDir(imgPath, c.firmwareDir); err != nil {
-		return fmt.Errorf("extract: %w", err)
+	// Atomically replace the destination image.
+	if err := moveFile(imgPath, c.imagePath); err != nil {
+		return fmt.Errorf("install image: %w", err)
+	}
+	_ = exec.Command("sync").Run()
+
+	log.Infof("firmware: installed image at %s", c.imagePath)
+
+	// Re-attach loop device to the new image inode.
+	if hadLoop {
+		if err := c.attachLoopLocked(); err != nil {
+			log.Warnf("firmware: post-download loop reattach: %v", err)
+		}
 	}
 
-	log.Info("firmware: building boot image from firmware dir")
-	if err := c.buildImageLocked(); err != nil {
-		return fmt.Errorf("build: %w", err)
-	}
-
-	log.Info("firmware: bootstrap complete")
-	return nil
-}
-
-// DownloadAndInit bootstraps from the upstream image, then presents via gadget.
-// Kept for API compatibility.
-func (c *Controller) DownloadAndInit() error {
-	if err := c.Bootstrap(); err != nil {
-		return err
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.presentImage(); err != nil {
-		log.Warnf("firmware: USB gadget present failed: %v", err)
+	// Re-present the (new) image for the gadget.
+	if wasPresented {
+		if err := c.presentImage(); err != nil {
+			log.Warnf("firmware: post-download present failed: %v", err)
+		}
 	}
 	return nil
-}
-
-// IsDownloading returns true if a download is in progress.
-func (c *Controller) IsDownloading() bool {
-	_, err := os.Stat(downloadSentinel)
-	return err == nil
 }
 
 func downloadFile(url, dest string) error {
@@ -148,4 +167,32 @@ func decompressXZ(src, dest string) error {
 		return fmt.Errorf("xz decompress: %w", err)
 	}
 	return outFile.Sync()
+}
+
+// moveFile renames src to dest, falling back to copy+remove for cross-FS moves.
+func moveFile(src, dest string) error {
+	if err := os.Rename(src, dest); err == nil {
+		return nil
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Remove(src)
 }

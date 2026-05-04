@@ -56,21 +56,15 @@ func firmwareRouter(r *gin.Engine) {
 	})
 
 	api.GET("/boot", func(c *gin.Context) {
-		persistent, err := ctrl.GetBootTarget()
+		bt, err := ctrl.GetBootTargets()
 		if err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
 			return
 		}
-		once, err := ctrl.GetOnceBootTarget()
-		if err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
-			return
-		}
-		effective, _ := ctrl.GetEffectiveBootTarget() // best-effort; ignore error
 		c.JSON(http.StatusOK, gin.H{
-			"persistent": persistent,
-			"once":       once,
-			"effective":  effective,
+			"persistent": bt.Persistent,
+			"once":       bt.Once,
+			"effective":  bt.Effective,
 		})
 	})
 
@@ -178,13 +172,13 @@ func firmwareRouter(r *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"file": name, "deleted": true})
 	})
 
-	// POST /api/firmware/build — rebuild the boot image from firmware-files dir.
-	api.POST("/build", func(c *gin.Context) {
-		if err := ctrl.BuildImage(); err != nil {
+	// POST /api/firmware/sync — copy files from firmwareDir into the mounted image.
+	api.POST("/sync", func(c *gin.Context) {
+		if err := ctrl.SyncFirmwareDirToImage(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "image rebuilt"})
+		c.JSON(http.StatusOK, gin.H{"message": "synced"})
 	})
 
 	// ---- gadget control ----------------------------------------------------
