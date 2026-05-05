@@ -59,7 +59,7 @@ type Controller struct {
 	imagePath   string
 	mountPoint  string
 	firmwareDir string
-	mediaDir    string
+	mediaDir    string // staging area for ISO files the user has uploaded
 
 	// Full host-OS paths under c.mountPoint for the U-Boot env files.
 	machineEnv    string
@@ -113,6 +113,12 @@ func (c *Controller) Init() error {
 	// Persistent loop attach — saves ~250ms per subsequent mount cycle.
 	if err := c.attachLoopLocked(); err != nil {
 		log.Warnf("firmware: loop attach failed (will retry on first mount): %v", err)
+	}
+
+	// Create lun.1 (virtual CD-ROM) now, before the UDC is bound, so the
+	// kernel accepts the topology change without needing an unbind/rebind.
+	if err := c.ensureLUN1(); err != nil {
+		log.Warnf("firmware: lun.1 setup failed (virtual media unavailable): %v", err)
 	}
 
 	log.Info("firmware: image found, presenting via USB gadget")

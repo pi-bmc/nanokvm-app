@@ -84,7 +84,7 @@ func (c *Controller) invalidateReaderCacheLocked() {
 }
 
 // fatRelPath converts a host-side path under c.mountPoint to its FAT
-// root-relative form (e.g. "/mnt/firmware/machine.env" → "/machine.env").
+// root-relative form (e.g. "/data/firmware/files/machine.env" → "/machine.env").
 func (c *Controller) fatRelPath(hostPath string) string {
 	rel := strings.TrimPrefix(hostPath, c.mountPoint)
 	if rel == "" || rel[0] != '/' {

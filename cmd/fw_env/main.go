@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	defaultMachineEnv    = "/mnt/firmware/machine.env"
-	defaultPersistentEnv = "/mnt/firmware/persistent.env"
+	defaultMachineEnv    = "/data/firmware/files/machine.env"
+	defaultPersistentEnv = "/data/firmware/files/persistent.env"
 )
 
 func main() {

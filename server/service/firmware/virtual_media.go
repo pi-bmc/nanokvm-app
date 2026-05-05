@@ -2,31 +2,31 @@ package firmware
 
 // virtual_media.go implements virtual media management.
 //
-// When media is inserted the ISO file is copied into the firmware FAT image
-// as "vm.iso". U-Boot loads that file via the blkmap driver. boot_targets is
-// set to BootTargetVirtMedia ("blkmap") in once.env so the next boot picks it
-// up automatically.
+// Workflow:
+//   1. One or more ISO files are staged in c.mediaDir (upload / fetch).
+//   2. The user selects one to insert.  InsertVirtualMedia writes the staged
+//      file path directly to the USB gadget's lun.1 configfs attribute.
+//      The managed server sees a USB CD-ROM without the ISO being copied
+//      anywhere — no writes to the firmware FAT image at all.
+//   3. Ejecting clears lun.1/file so the host sees an empty tray.
 //
-// When media is ejected vm.iso is removed from the FAT image and the
-// once.env boot override is cleared.
+// This avoids the "no space left" problem of trying to write an ISO into the
+// small FAT partition that is already full with U-Boot firmware files.
 
 import (
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
-
-	"github.com/tinkerbell-community/NanoKVM/server/service/ubootenv"
 )
 
 // VirtualMediaState describes the current ISO insertion state.
 type VirtualMediaState struct {
 	Inserted  bool   `json:"inserted"`
-	ImageName string `json:"imageName,omitempty"` // filename of the inserted ISO
-	ImageSize int64  `json:"imageSize,omitempty"` // bytes
+	ImageName string `json:"imageName,omitempty"` // original filename chosen by the user
+	ImageSize int64  `json:"imageSize,omitempty"` // size in bytes
 }
 
 // GetVirtualMediaState returns the current virtual media state.
@@ -36,120 +36,25 @@ func (c *Controller) GetVirtualMediaState() VirtualMediaState {
 	return c.vmState
 }
 
-// vmISOName is the filename used inside the firmware FAT image for virtual media.
-const vmISOName = "vm.iso"
+// GetMediaDir returns the path to the ISO staging directory.
+func (c *Controller) GetMediaDir() string { return c.mediaDir }
 
-// InsertVirtualMedia copies the named ISO into the firmware FAT image as
-// "vm.iso" and sets boot_targets=blkmap in once.env so U-Boot's blkmap
-// driver will load and boot it on the next power cycle.
-// name must be a filename (not a path) inside c.mediaDir.
-func (c *Controller) InsertVirtualMedia(name string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	defer c.invalidateReaderCacheLocked()
-
-	if c.vmState.Inserted {
-		return fmt.Errorf("virtual media already inserted: %s", c.vmState.ImageName)
+// mediaPathFor returns the absolute path of name inside the media dir and
+// verifies the result doesn't escape outside it.
+func (c *Controller) mediaPathFor(name string) (string, error) {
+	clean := filepath.Base(name)
+	if clean == "" || clean == "." {
+		return "", fmt.Errorf("invalid media filename %q", name)
 	}
-
-	isoPath, err := c.mediaPathFor(name)
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(isoPath)
-	if err != nil {
-		return fmt.Errorf("ISO not found: %w", err)
-	}
-
-	// Copy the ISO into the firmware FAT image as vm.iso, then update once.env
-	// — all within a single mount window so we only unmount/present once.
-	if err := c.withMount(func() error {
-		destPath := filepath.Join(c.mountPoint, vmISOName)
-
-		src, err := os.Open(isoPath)
-		if err != nil {
-			return fmt.Errorf("open ISO: %w", err)
-		}
-		defer src.Close()
-
-		dst, err := os.Create(destPath)
-		if err != nil {
-			return fmt.Errorf("create vm.iso in image: %w", err)
-		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, src); err != nil {
-			_ = os.Remove(destPath) // clean up partial file
-			return fmt.Errorf("copy ISO to image: %w", err)
-		}
-
-		// Update once.env: boot_targets = blkmap.
-		env, err := loadEnvFile(c.onceEnv)
-		if err != nil {
-			return err
-		}
-		env.Set(ubootenv.VarBootTargets, BootTargetVirtMedia)
-		return saveOrRemoveEnv(env, c.onceEnv)
-	}); err != nil {
-		return fmt.Errorf("insert virtual media: %w", err)
-	}
-
-	c.vmState = VirtualMediaState{
-		Inserted:  true,
-		ImageName: name,
-		ImageSize: info.Size(),
-	}
-
-	log.Infof("firmware: inserted virtual media %s (%d bytes) as %s", name, info.Size(), vmISOName)
-	return nil
+	return filepath.Join(c.mediaDir, clean), nil
 }
 
-// EjectVirtualMedia removes vm.iso from the firmware FAT image and clears
-// the blkmap boot_targets override from once.env.
-func (c *Controller) EjectVirtualMedia() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	defer c.invalidateReaderCacheLocked()
-
-	if !c.vmState.Inserted {
-		return nil // idempotent
-	}
-
-	prevName := c.vmState.ImageName
-
-	// Remove vm.iso from the FAT image and clear the boot override — one
-	// mount window so we only need to unpresent/present once.
-	if err := c.withMount(func() error {
-		destPath := filepath.Join(c.mountPoint, vmISOName)
-		if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove vm.iso from image: %w", err)
-		}
-		env, err := loadEnvFile(c.onceEnv)
-		if err != nil {
-			return err
-		}
-		env.Delete(ubootenv.VarBootTargets)
-		return saveOrRemoveEnv(env, c.onceEnv)
-	}); err != nil {
-		return fmt.Errorf("eject virtual media: %w", err)
-	}
-
-	c.vmState = VirtualMediaState{}
-
-	log.Infof("firmware: ejected virtual media %s", prevName)
-	return nil
-}
-
-// ListMediaFiles returns the ISO filenames available in c.mediaDir.
+// ListMediaFiles returns the filenames present in the media staging directory.
 func (c *Controller) ListMediaFiles() ([]string, error) {
-	c.mu.Lock()
-	dir := c.mediaDir
-	c.mu.Unlock()
-
-	if dir == "" {
+	if c.mediaDir == "" {
 		return nil, fmt.Errorf("mediaDir not configured")
 	}
-	entries, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(c.mediaDir)
 	if os.IsNotExist(err) {
 		return []string{}, nil
 	}
@@ -165,55 +70,100 @@ func (c *Controller) ListMediaFiles() ([]string, error) {
 	return names, nil
 }
 
-// SaveMediaFile writes data to a new ISO file in c.mediaDir.
-func (c *Controller) SaveMediaFile(name string, data []byte) error {
-	c.mu.Lock()
-	path, err := c.mediaPathFor(name)
-	c.mu.Unlock()
+// SaveMediaFile writes r to mediaDir/<name>, creating the directory if needed.
+// It returns the number of bytes saved.
+func (c *Controller) SaveMediaFile(name string, r io.Reader) (int64, error) {
+	if c.mediaDir == "" {
+		return 0, fmt.Errorf("mediaDir not configured")
+	}
+	destPath, err := c.mediaPathFor(name)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir mediaDir: %w", err)
+	if err := os.MkdirAll(c.mediaDir, 0o755); err != nil {
+		return 0, fmt.Errorf("create media dir: %w", err)
 	}
-	return os.WriteFile(path, data, 0o644)
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return 0, err
+	}
+	n, copyErr := io.Copy(f, r)
+	syncErr := f.Sync()
+	_ = f.Close()
+	if copyErr != nil {
+		_ = os.Remove(destPath)
+		return 0, fmt.Errorf("write media file: %w", copyErr)
+	}
+	if syncErr != nil {
+		return n, fmt.Errorf("sync media file: %w", syncErr)
+	}
+	log.Infof("firmware: saved media file %q (%d bytes)", name, n)
+	return n, nil
 }
 
-// DeleteMediaFile removes the named ISO from c.mediaDir.
-// Returns an error if the file is currently inserted.
+// DeleteMediaFile removes name from the media staging directory.
+// Returns an error if that file is currently inserted.
 func (c *Controller) DeleteMediaFile(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	if c.vmState.Inserted && c.vmState.ImageName == name {
-		return fmt.Errorf("cannot delete currently inserted media %q; eject first", name)
+		return fmt.Errorf("cannot delete %q: currently inserted; eject first", name)
 	}
-	path, err := c.mediaPathFor(name)
+	destPath, err := c.mediaPathFor(name)
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove %s: %w", name, err)
+	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	return nil
 }
 
-// GetMediaDir returns the directory where ISOs are stored.
-func (c *Controller) GetMediaDir() string {
+// InsertVirtualMedia presents the named ISO from mediaDir as a USB CD-ROM
+// via the gadget's lun.1. The ISO is NOT copied anywhere — the gadget reads
+// it directly from mediaDir, so no space in the firmware FAT is consumed.
+func (c *Controller) InsertVirtualMedia(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.mediaDir
+
+	if c.vmState.Inserted {
+		return fmt.Errorf("virtual media already inserted (%s); eject first", c.vmState.ImageName)
+	}
+
+	srcPath, err := c.mediaPathFor(name)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return fmt.Errorf("media file %q not found: %w", name, err)
+	}
+
+	if err := c.presentISO(srcPath); err != nil {
+		return fmt.Errorf("insert virtual media: %w", err)
+	}
+
+	c.vmState = VirtualMediaState{Inserted: true, ImageName: name, ImageSize: info.Size()}
+	log.Infof("firmware: inserted virtual media %q (%d bytes) via lun.1", name, info.Size())
+	return nil
 }
 
-// mediaPathFor resolves a bare filename to its absolute path in c.mediaDir,
-// rejecting any path traversal.
-func (c *Controller) mediaPathFor(name string) (string, error) {
-	if c.mediaDir == "" {
-		return "", fmt.Errorf("mediaDir not configured")
+// EjectVirtualMedia clears lun.1 so the managed server sees an empty CD-ROM tray.
+func (c *Controller) EjectVirtualMedia() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.vmState.Inserted {
+		return nil // idempotent
 	}
-	base := filepath.Base(name)
-	if base == "" || base == "." || strings.ContainsAny(base, "/\\") {
-		return "", fmt.Errorf("invalid media filename %q", name)
+
+	prevName := c.vmState.ImageName
+
+	if err := c.unpresentISO(); err != nil {
+		return fmt.Errorf("eject virtual media: %w", err)
 	}
-	return filepath.Join(c.mediaDir, base), nil
+
+	c.vmState = VirtualMediaState{}
+	log.Infof("firmware: ejected virtual media %s", prevName)
+	return nil
 }

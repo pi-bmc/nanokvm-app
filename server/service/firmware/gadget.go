@@ -11,12 +11,20 @@ import (
 )
 
 const (
+	// lun.0 — firmware image (U-Boot + env files).
 	gadgetLUNPath   = "/sys/kernel/config/usb_gadget/g0/functions/mass_storage.disk0/lun.0"
 	gadgetFilePath  = gadgetLUNPath + "/file"
 	gadgetROPath    = gadgetLUNPath + "/ro"
 	gadgetCdromPath = gadgetLUNPath + "/cdrom"
 	gadgetInquiry   = gadgetLUNPath + "/inquiry_string"
 	gadgetUDC       = "/sys/kernel/config/usb_gadget/g0/UDC"
+
+	// lun.1 — virtual CD-ROM for ISO media (created on demand).
+	gadgetLUN1Dir       = "/sys/kernel/config/usb_gadget/g0/functions/mass_storage.disk0/lun.1"
+	gadgetLUN1File      = gadgetLUN1Dir + "/file"
+	gadgetLUN1CDRom     = gadgetLUN1Dir + "/cdrom"
+	gadgetLUN1RO        = gadgetLUN1Dir + "/ro"
+	gadgetLUN1Removable = gadgetLUN1Dir + "/removable"
 )
 
 // presentImage writes the firmware image file path to the USB mass storage
@@ -139,4 +147,85 @@ func udcBound() bool {
 		return false
 	}
 	return strings.TrimSpace(string(data)) != ""
+}
+
+// ---- virtual media (lun.1 CD-ROM) -----------------------------------------
+
+// ensureLUN1 creates the lun.1 directory in configfs and configures it as a
+// read-only, removable CD-ROM. If the UDC is already bound (e.g. from a
+// previous server run — configfs persists across process restarts), it unbinds,
+// creates lun.1, then rebinds. Must be called with c.mu held.
+func (c *Controller) ensureLUN1() error {
+	if _, err := os.Stat(gadgetLUN1Dir); err == nil {
+		return nil // already exists from a previous run
+	}
+
+	if udcBound() {
+		// Unbind the UDC and wait until the kernel confirms it is released.
+		// Writing "" is asynchronous on some kernels; poll until clear.
+		_ = os.WriteFile(gadgetUDC, []byte(""), 0o666)
+		for i := 0; i < 20; i++ {
+			time.Sleep(50 * time.Millisecond)
+			if !udcBound() {
+				break
+			}
+		}
+		if udcBound() {
+			return fmt.Errorf("timed out waiting for UDC to unbind before creating lun.1")
+		}
+		// Also clear lun.0/file so f_mass_storage releases its hold.
+		_ = os.WriteFile(gadgetFilePath, []byte(""), 0o666)
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if err := os.Mkdir(gadgetLUN1Dir, 0o755); err != nil {
+		return fmt.Errorf("create lun.1: %w", err)
+	}
+	// cdrom=1 → 2048-byte El Torito mode. UEFI/BIOS targets boot via El Torito
+	// (not through a partition filesystem), so no FAT sector-size mismatch arises.
+	_ = os.WriteFile(gadgetLUN1CDRom, []byte("1"), 0o666)
+	_ = os.WriteFile(gadgetLUN1RO, []byte("1"), 0o666)
+	_ = os.WriteFile(gadgetLUN1Removable, []byte("1"), 0o666)
+
+	// Rebind so the host enumerates both LUNs.
+	if err := resetUDC(); err != nil {
+		return fmt.Errorf("rebind UDC after lun.1 create: %w", err)
+	}
+	// presentImage will re-write lun.0/file; mark as not presented so it does.
+	c.presented = false
+
+	log.Info("firmware: virtual media LUN (lun.1) created and UDC rebound")
+	return nil
+}
+
+// presentISO sets the ISO file as the backing file for lun.1. The host sees
+// a USB CD-ROM containing the ISO. Must be called with c.mu held.
+func (c *Controller) presentISO(isoPath string) error {
+	if err := c.ensureLUN1(); err != nil {
+		return err
+	}
+	// Ensure attributes are set (configfs survives a process restart but
+	// may not persist across reboots depending on the init scripts).
+	_ = os.WriteFile(gadgetLUN1CDRom, []byte("1"), 0o666)
+	_ = os.WriteFile(gadgetLUN1RO, []byte("1"), 0o666)
+	_ = os.WriteFile(gadgetLUN1Removable, []byte("1"), 0o666)
+
+	if err := os.WriteFile(gadgetLUN1File, []byte(isoPath), 0o666); err != nil {
+		return fmt.Errorf("set lun.1 file: %w", err)
+	}
+	log.Infof("firmware: virtual media lun.1 → %s", isoPath)
+	return nil
+}
+
+// unpresentISO clears the backing file from lun.1 so the host sees an empty
+// CD-ROM tray. Must be called with c.mu held.
+func (c *Controller) unpresentISO() error {
+	if _, err := os.Stat(gadgetLUN1Dir); err != nil {
+		return nil // lun.1 doesn't exist; nothing to clear
+	}
+	if err := os.WriteFile(gadgetLUN1File, []byte(""), 0o666); err != nil {
+		return fmt.Errorf("clear lun.1 file: %w", err)
+	}
+	log.Info("firmware: virtual media lun.1 cleared")
+	return nil
 }
