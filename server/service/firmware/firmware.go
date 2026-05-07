@@ -29,8 +29,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/tinkerbell-community/NanoKVM/server/config"
-	"github.com/tinkerbell-community/NanoKVM/server/service/ubootenv"
+	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/BMCPi/NanoKVM/server/service/ubootenv"
 )
 
 // Status describes the current state of the firmware controller.

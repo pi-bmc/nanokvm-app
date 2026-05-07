@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tinkerbell-community/NanoKVM/server/utils"
+	"github.com/BMCPi/NanoKVM/server/utils"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"

@@ -1,4 +1,4 @@
-module github.com/tinkerbell-community/NanoKVM
+module github.com/BMCPi/NanoKVM
 
 go 1.25.7
 
@@ -83,5 +83,5 @@ require (
 
 tool (
 	github.com/a-h/templ/cmd/templ
-	github.com/tinkerbell-community/NanoKVM/tools/tailwindcss
+	github.com/BMCPi/NanoKVM/tools/tailwindcss
 )

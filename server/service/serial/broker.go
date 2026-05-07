@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	goserial "go.bug.st/serial"
 
-	"github.com/tinkerbell-community/NanoKVM/server/config"
+	"github.com/BMCPi/NanoKVM/server/config"
 )
 
 // Session represents one consumer of the serial port (WebSocket, IPMI SOL, etc.).

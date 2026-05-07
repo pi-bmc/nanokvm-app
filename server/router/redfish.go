@@ -1,8 +1,8 @@
 package router
 
 import (
-	"github.com/tinkerbell-community/NanoKVM/server/middleware"
-	"github.com/tinkerbell-community/NanoKVM/server/service/redfish"
+	"github.com/BMCPi/NanoKVM/server/middleware"
+	"github.com/BMCPi/NanoKVM/server/service/redfish"
 
 	"github.com/gin-gonic/gin"
 )

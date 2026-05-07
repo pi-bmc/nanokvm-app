@@ -3,8 +3,8 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/tinkerbell-community/NanoKVM/server/middleware"
-	"github.com/tinkerbell-community/NanoKVM/server/service/network"
+	"github.com/BMCPi/NanoKVM/server/middleware"
+	"github.com/BMCPi/NanoKVM/server/service/network"
 )
 
 func networkRouter(r *gin.Engine) {

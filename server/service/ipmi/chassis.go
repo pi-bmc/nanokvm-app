@@ -3,8 +3,8 @@ package ipmi
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/tinkerbell-community/NanoKVM/server/service/firmware"
-	"github.com/tinkerbell-community/NanoKVM/server/service/power"
+	"github.com/BMCPi/NanoKVM/server/service/firmware"
+	"github.com/BMCPi/NanoKVM/server/service/power"
 )
 
 // handleGetDeviceID returns BMC device identification per IPMI Table 20-2.

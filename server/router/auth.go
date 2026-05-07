@@ -3,8 +3,8 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/tinkerbell-community/NanoKVM/server/middleware"
-	"github.com/tinkerbell-community/NanoKVM/server/service/auth"
+	"github.com/BMCPi/NanoKVM/server/middleware"
+	"github.com/BMCPi/NanoKVM/server/service/auth"
 )
 
 func authRouter(r *gin.Engine) {

@@ -31,7 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/tinkerbell-community/NanoKVM/server/config"
+	"github.com/BMCPi/NanoKVM/server/config"
 )
 
 const (

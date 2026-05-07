@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/tinkerbell-community/NanoKVM/server/config"
+	"github.com/BMCPi/NanoKVM/server/config"
 )
 
 func init() {

@@ -4,10 +4,10 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/tinkerbell-community/NanoKVM/server/assets"
-	"github.com/tinkerbell-community/NanoKVM/server/config"
-	"github.com/tinkerbell-community/NanoKVM/server/middleware"
-	"github.com/tinkerbell-community/NanoKVM/server/templates"
+	"github.com/BMCPi/NanoKVM/server/assets"
+	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/BMCPi/NanoKVM/server/middleware"
+	"github.com/BMCPi/NanoKVM/server/templates"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

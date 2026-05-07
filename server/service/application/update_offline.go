@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BMCPi/NanoKVM/server/proto"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
-	"github.com/tinkerbell-community/NanoKVM/server/proto"
 )
 
 var validFilenameRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)

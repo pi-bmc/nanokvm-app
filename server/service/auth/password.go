@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/tinkerbell-community/NanoKVM/server/proto"
-	"github.com/tinkerbell-community/NanoKVM/server/utils"
+	"github.com/BMCPi/NanoKVM/server/proto"
+	"github.com/BMCPi/NanoKVM/server/utils"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

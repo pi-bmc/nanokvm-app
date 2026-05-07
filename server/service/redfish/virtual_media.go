@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/tinkerbell-community/NanoKVM/server/service/firmware"
+	"github.com/BMCPi/NanoKVM/server/service/firmware"
 )
 
 // GetVirtualMediaCollection returns the VirtualMedia collection for Manager/1.

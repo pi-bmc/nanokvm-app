@@ -40,7 +40,7 @@ import (
 	"github.com/diskfs/go-diskfs/disk"
 	"github.com/diskfs/go-diskfs/filesystem"
 
-	"github.com/tinkerbell-community/NanoKVM/server/service/ubootenv"
+	"github.com/BMCPi/NanoKVM/server/service/ubootenv"
 )
 
 // readerCache holds a parsed view of the firmware image. Lifetime is
