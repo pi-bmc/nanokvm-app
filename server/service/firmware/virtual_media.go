@@ -72,10 +72,43 @@ type VirtualMediaState struct {
 }
 
 // GetVirtualMediaState returns the current virtual media state.
+//
+// If the in-memory state shows nothing inserted, the lun.1/file configfs
+// attribute is consulted as a source of truth. configfs persists across BMC
+// restarts, so a previously-inserted ISO must still be reflected in the UI
+// after the server process is restarted.
 func (c *Controller) GetVirtualMediaState() VirtualMediaState {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if !c.vmState.Inserted {
+		if recovered, ok := c.recoverVMStateFromGadget(); ok {
+			c.vmState = recovered
+		}
+	}
 	return c.vmState
+}
+
+// recoverVMStateFromGadget inspects gadgetLUN1File and, if it points at a
+// readable file, returns a populated VirtualMediaState. Caller must hold c.mu.
+func (c *Controller) recoverVMStateFromGadget() (VirtualMediaState, bool) {
+	data, err := os.ReadFile(gadgetLUN1File)
+	if err != nil {
+		return VirtualMediaState{}, false
+	}
+	path := strings.TrimSpace(string(data))
+	if path == "" {
+		return VirtualMediaState{}, false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return VirtualMediaState{}, false
+	}
+	return VirtualMediaState{
+		Inserted:  true,
+		ImageName: filepath.Base(path),
+		ImageSize: info.Size(),
+	}, true
 }
 
 // GetMediaDir returns the path to the ISO staging directory.

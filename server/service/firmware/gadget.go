@@ -50,7 +50,7 @@ func (c *Controller) presentImage() error {
 	// Clear first, then set to the image file path. Retry on EBUSY because
 	// a just-detached loop device or in-flight gadget I/O can briefly hold
 	// the backing file.
-	_ = os.WriteFile(gadgetFilePath, []byte(""), 0o666)
+	_ = os.WriteFile(gadgetFilePath, []byte("\n"), 0o666)
 	var lastErr error
 	for i := 0; i < 10; i++ {
 		if err := os.WriteFile(gadgetFilePath, []byte(c.imagePath), 0o666); err == nil {
@@ -86,7 +86,7 @@ func (c *Controller) unpresentImage() error {
 		return nil
 	}
 
-	if err := os.WriteFile(gadgetFilePath, []byte(""), 0o666); err != nil {
+	if err := os.WriteFile(gadgetFilePath, []byte("\n"), 0o666); err != nil {
 		return fmt.Errorf("clear gadget file: %w", err)
 	}
 
@@ -114,7 +114,7 @@ func (c *Controller) Unpresent() error {
 
 func resetUDC() error {
 	// Clear UDC.
-	if err := os.WriteFile(gadgetUDC, []byte(""), 0o666); err != nil {
+	if err := os.WriteFile(gadgetUDC, []byte("\n"), 0o666); err != nil {
 		return fmt.Errorf("clear UDC: %w", err)
 	}
 
@@ -163,7 +163,7 @@ func (c *Controller) ensureLUN1() error {
 	if udcBound() {
 		// Unbind the UDC and wait until the kernel confirms it is released.
 		// Writing "" is asynchronous on some kernels; poll until clear.
-		_ = os.WriteFile(gadgetUDC, []byte(""), 0o666)
+		_ = os.WriteFile(gadgetUDC, []byte("\n"), 0o666)
 		for i := 0; i < 20; i++ {
 			time.Sleep(50 * time.Millisecond)
 			if !udcBound() {
@@ -174,7 +174,7 @@ func (c *Controller) ensureLUN1() error {
 			return fmt.Errorf("timed out waiting for UDC to unbind before creating lun.1")
 		}
 		// Also clear lun.0/file so f_mass_storage releases its hold.
-		_ = os.WriteFile(gadgetFilePath, []byte(""), 0o666)
+		_ = os.WriteFile(gadgetFilePath, []byte("\n"), 0o666)
 		time.Sleep(50 * time.Millisecond)
 	}
 
@@ -223,7 +223,7 @@ func (c *Controller) unpresentISO() error {
 	if _, err := os.Stat(gadgetLUN1Dir); err != nil {
 		return nil // lun.1 doesn't exist; nothing to clear
 	}
-	if err := os.WriteFile(gadgetLUN1File, []byte(""), 0o666); err != nil {
+	if err := os.WriteFile(gadgetLUN1File, []byte("\n"), 0o666); err != nil {
 		return fmt.Errorf("clear lun.1 file: %w", err)
 	}
 	log.Info("firmware: virtual media lun.1 cleared")
