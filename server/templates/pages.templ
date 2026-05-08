@@ -370,7 +370,40 @@ templ DashboardPage() {
 			window.connectSerial = function() {
 				if (ws) disconnectSerial();
 
-				term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: 'Menlo, Monaco, "Courier New", monospace' });
+        // Read Tailwind v4 CSS custom properties at runtime so the terminal
+        // theme always tracks the design system's dark-mode palette.
+        const _cs = getComputedStyle(document.documentElement);
+        const _tw = (v) => _cs.getPropertyValue(v).trim() || undefined;
+        term = new Terminal({
+					cursorBlink: true,
+					fontSize: 13,
+					fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+					theme: {
+						background:          _tw('--color-neutral-950'),
+						foreground:          _tw('--color-neutral-300'),
+						cursor:              _tw('--color-neutral-400'),
+						cursorAccent:        _tw('--color-neutral-950'),
+						selectionBackground: _tw('--color-neutral-700'),
+						// ANSI normal
+						black:               _tw('--color-neutral-800'),
+						red:                 _tw('--color-red-500'),
+						green:               _tw('--color-green-500'),
+						yellow:              _tw('--color-yellow-500'),
+						blue:                _tw('--color-blue-500'),
+						magenta:             _tw('--color-purple-500'),
+						cyan:                _tw('--color-cyan-500'),
+						white:               _tw('--color-neutral-300'),
+						// ANSI bright
+						brightBlack:         _tw('--color-neutral-600'),
+						brightRed:           _tw('--color-red-400'),
+						brightGreen:         _tw('--color-green-400'),
+						brightYellow:        _tw('--color-yellow-400'),
+						brightBlue:          _tw('--color-blue-400'),
+						brightMagenta:       _tw('--color-purple-400'),
+						brightCyan:          _tw('--color-cyan-400'),
+						brightWhite:         _tw('--color-neutral-100'),
+					}
+				});
 				fitAddon = new FitAddon();
 				term.loadAddon(fitAddon);
 				const el = document.getElementById('terminal');
