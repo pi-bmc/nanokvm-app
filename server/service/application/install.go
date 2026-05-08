@@ -3,6 +3,7 @@ package application
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/BMCPi/NanoKVM/server/utils"
@@ -32,7 +33,12 @@ func releaseUpdateLock() {
 }
 
 func installPackage(source string) error {
-	dir, err := utils.UnTarGz(source, CacheDir)
+	// Extract into a dedicated subdir of CacheDir so the downloaded tarball
+	// (which lives directly under CacheDir) isn't swept into AppDir below.
+	extractDir := filepath.Join(CacheDir, "extracted")
+	_ = os.RemoveAll(extractDir)
+
+	dir, err := utils.UnTarGz(source, extractDir)
 	if err != nil {
 		return fmt.Errorf("failed to decompress app: %w", err)
 	}
