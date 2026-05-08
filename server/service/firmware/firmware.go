@@ -36,6 +36,7 @@ import (
 // Status describes the current state of the firmware controller.
 type Status struct {
 	Downloaded    bool   `json:"downloaded"`
+	Downloading   bool   `json:"downloading"`
 	Presented     bool   `json:"presented"`
 	ImagePath     string `json:"imagePath"`
 	MountPoint    string `json:"mountPoint"`
@@ -144,6 +145,7 @@ func (c *Controller) GetStatus() Status {
 
 	return Status{
 		Downloaded:    c.imageExists(),
+		Downloading:   c.IsDownloading(),
 		Presented:     c.presented,
 		ImagePath:     c.imagePath,
 		MountPoint:    c.mountPoint,

@@ -45,34 +45,71 @@ type UBootRelease struct {
 
 var (
 	releaseCacheMu     sync.Mutex
-	releaseCacheValue  *UBootRelease
+	releaseCacheAll    []UBootRelease // all parsed releases; nil = not yet fetched
 	releaseCacheExpiry time.Time
 )
+
+// allUBootReleases returns all u-boot releases from GitHub. Cached for 1 hour.
+func allUBootReleases() ([]UBootRelease, error) {
+	releaseCacheMu.Lock()
+	defer releaseCacheMu.Unlock()
+
+	if releaseCacheAll != nil && time.Now().Before(releaseCacheExpiry) {
+		return releaseCacheAll, nil
+	}
+
+	all, err := fetchAllUBootReleases()
+	if err != nil {
+		return nil, err
+	}
+	releaseCacheAll = all
+	releaseCacheExpiry = time.Now().Add(releaseCacheTTL)
+	return all, nil
+}
 
 // LatestUBootRelease returns the newest u-boot release on GitHub. Cached
 // for 1 hour on success; failures are not cached.
 func LatestUBootRelease() (*UBootRelease, error) {
-	releaseCacheMu.Lock()
-	defer releaseCacheMu.Unlock()
-
-	if releaseCacheValue != nil && time.Now().Before(releaseCacheExpiry) {
-		return releaseCacheValue, nil
-	}
-
-	rel, err := fetchLatestUBootRelease()
+	all, err := allUBootReleases()
 	if err != nil {
 		return nil, err
 	}
-	releaseCacheValue = rel
-	releaseCacheExpiry = time.Now().Add(releaseCacheTTL)
-	return rel, nil
+	var best *UBootRelease
+	for i := range all {
+		if best == nil || CompareUBootVersions(all[i].Version, best.Version) > 0 {
+			r := all[i]
+			best = &r
+		}
+	}
+	if best == nil {
+		return nil, fmt.Errorf("no u-boot release with asset %q found", ubootAssetName)
+	}
+	log.Debugf("firmware: latest u-boot release %s (%s)", best.Version, best.AssetURL)
+	return best, nil
 }
 
-// InvalidateLatestUBootCache forces the next LatestUBootRelease to refetch.
+// ReleaseByVersion finds the GitHub release for a specific U-Boot version
+// string (e.g. "v2026.04" or "2026.04"). Returns an error if not found.
+func ReleaseByVersion(version string) (*UBootRelease, error) {
+	all, err := allUBootReleases()
+	if err != nil {
+		return nil, err
+	}
+	norm := strings.ToLower(strings.TrimPrefix(version, "v"))
+	for i := range all {
+		if strings.ToLower(strings.TrimPrefix(all[i].Version, "v")) == norm {
+			r := all[i]
+			return &r, nil
+		}
+	}
+	return nil, fmt.Errorf("u-boot release %q not found in GitHub releases", version)
+}
+
+// InvalidateLatestUBootCache forces the next release lookup to refetch from GitHub.
 func InvalidateLatestUBootCache() {
 	releaseCacheMu.Lock()
 	defer releaseCacheMu.Unlock()
-	releaseCacheValue = nil
+	releaseCacheAll = nil
 	releaseCacheExpiry = time.Time{}
 }
 
@@ -88,7 +125,7 @@ type ghAsset struct {
 	Size               int64  `json:"size"`
 }
 
-func fetchLatestUBootRelease() (*UBootRelease, error) {
+func fetchAllUBootReleases() ([]UBootRelease, error) {
 	req, err := http.NewRequest("GET", ubootReleasesURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -109,14 +146,14 @@ func fetchLatestUBootRelease() (*UBootRelease, error) {
 		return nil, fmt.Errorf("github status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	var releases []ghRelease
-	if err := json.Unmarshal(body, &releases); err != nil {
+	var ghReleases []ghRelease
+	if err := json.Unmarshal(body, &ghReleases); err != nil {
 		return nil, fmt.Errorf("unmarshal releases: %w", err)
 	}
 
-	var best *UBootRelease
-	for i := range releases {
-		r := &releases[i]
+	var result []UBootRelease
+	for i := range ghReleases {
+		r := &ghReleases[i]
 		if r.Draft {
 			continue
 		}
@@ -128,21 +165,18 @@ func fetchLatestUBootRelease() (*UBootRelease, error) {
 		if asset == nil {
 			continue
 		}
-		cand := &UBootRelease{
+		result = append(result, UBootRelease{
 			Version:  version,
 			Tag:      r.TagName,
 			AssetURL: asset.BrowserDownloadURL,
 			Size:     asset.Size,
-		}
-		if best == nil || CompareUBootVersions(cand.Version, best.Version) > 0 {
-			best = cand
-		}
+		})
 	}
-	if best == nil {
-		return nil, fmt.Errorf("no u-boot release with asset %q found", ubootAssetName)
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no u-boot releases with asset %q found", ubootAssetName)
 	}
-	log.Debugf("firmware: latest u-boot release %s (%s)", best.Version, best.AssetURL)
-	return best, nil
+	log.Debugf("firmware: fetched %d u-boot releases from GitHub", len(result))
+	return result, nil
 }
 
 func findUBootAsset(assets []ghAsset) *ghAsset {

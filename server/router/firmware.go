@@ -369,4 +369,72 @@ func firmwareRouter(r *gin.Engine) {
 
 		c.JSON(http.StatusAccepted, gin.H{"message": "update started"})
 	})
+
+	// ---- Kernel-version → U-Boot image management -------------------------
+
+	// GET /api/firmware/bios/kernels — list all supported kernel versions with
+	// their mapped U-Boot version and local download/active state.
+	api.GET("/bios/kernels", func(c *gin.Context) {
+		info, _ := ctrl.GetUBootVersionInfo() // best-effort; ignore error
+		kernels := make([]gin.H, 0, len(firmware.KernelUBootMap))
+		for _, k := range firmware.KernelVersionsSorted() {
+			ubootVer := firmware.KernelUBootMap[k]
+			downloaded := ctrl.VersionedImageExists(ubootVer)
+			// "active" means this version is currently running.
+			active := info.Current != "" &&
+				strings.EqualFold(
+					strings.TrimPrefix(info.Current, "v"),
+					strings.TrimPrefix(ubootVer, "v"),
+				)
+			kernels = append(kernels, gin.H{
+				"kernel":     k,
+				"uboot":      ubootVer,
+				"downloaded": downloaded,
+				"active":     active,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"kernels": kernels})
+	})
+
+	// POST /api/firmware/bios/kernel/:kernel/download — download and cache the
+	// U-Boot image for the given kernel version without activating it.
+	api.POST("/bios/kernel/:kernel/download", func(c *gin.Context) {
+		kernel := c.Param("kernel")
+		ubootVer, ok := firmware.KernelUBootMap[kernel]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown kernel version %q", kernel)})
+			return
+		}
+		if ctrl.IsDownloading() {
+			c.JSON(http.StatusConflict, gin.H{"error": "download already in progress"})
+			return
+		}
+		rel, err := firmware.ReleaseByVersion(ubootVer)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		go func(ver, url string) {
+			if err := ctrl.DownloadVersionedImage(ver, url); err != nil {
+				log.Errorf("versioned image download failed (%s): %v", ver, err)
+			}
+		}(ubootVer, rel.AssetURL)
+		c.JSON(http.StatusAccepted, gin.H{"message": "download started", "uboot": ubootVer})
+	})
+
+	// POST /api/firmware/bios/kernel/:kernel/activate — swap the cached image
+	// for the given kernel version into the active slot, preserving env files.
+	api.POST("/bios/kernel/:kernel/activate", func(c *gin.Context) {
+		kernel := c.Param("kernel")
+		ubootVer, ok := firmware.KernelUBootMap[kernel]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown kernel version %q", kernel)})
+			return
+		}
+		if err := ctrl.ActivateVersionedImage(ubootVer); err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "activated", "uboot": ubootVer})
+	})
 }

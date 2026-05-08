@@ -764,6 +764,130 @@ templ DashboardPage() {
 				}
 			};
 
+			// ---- Kernel version → U-Boot image selector ----------------------------
+
+			async function loadKernelVersions() {
+				try {
+					const r = await fetch('/api/firmware/bios/kernels', { headers: getAuthHeaders() });
+					if (!r.ok) return;
+					const data = await r.json();
+					const select = document.getElementById('bios-kernel-select');
+					if (!select) return;
+					// Preserve placeholder, replace any existing options.
+					while (select.options.length > 1) select.remove(1);
+					for (const k of (data.kernels || [])) {
+						const opt = document.createElement('option');
+						opt.value = k.kernel;
+						let label = `Linux ${k.kernel} \u2192 U-Boot ${k.uboot}`;
+						if (k.active) label += ' \u2605 Active';
+						else if (k.downloaded) label += ' (Downloaded)';
+						opt.textContent = label;
+						opt.dataset.downloaded = k.downloaded ? '1' : '';
+						opt.dataset.active = k.active ? '1' : '';
+						select.appendChild(opt);
+					}
+					updateKernelButtons();
+				} catch(e) {
+					console.warn('kernel version list failed:', e);
+				}
+			}
+			loadKernelVersions();
+
+			window.updateKernelButtons = function() {
+				const select = document.getElementById('bios-kernel-select');
+				if (!select) return;
+				const opt = select.options[select.selectedIndex];
+				const dlBtn = document.getElementById('btn-kernel-download');
+				const actBtn = document.getElementById('btn-kernel-activate');
+				const status = document.getElementById('bios-kernel-status');
+				if (!opt || !opt.value) {
+					dlBtn.style.display = 'none';
+					actBtn.style.display = 'none';
+					status.textContent = '';
+					return;
+				}
+				const downloaded = !!opt.dataset.downloaded;
+				const active = !!opt.dataset.active;
+				dlBtn.style.display = downloaded ? 'none' : '';
+				actBtn.style.display = (downloaded && !active) ? '' : 'none';
+				status.textContent = active ? '\u2605 Active' : '';
+				status.style.color = active ? '#22c55e' : '#71717a';
+			};
+
+			window.downloadKernelBIOS = async function() {
+				const select = document.getElementById('bios-kernel-select');
+				const kernel = select.value;
+				if (!kernel) return;
+				const dlBtn = document.getElementById('btn-kernel-download');
+				const status = document.getElementById('bios-kernel-status');
+				dlBtn.disabled = true;
+				dlBtn.textContent = 'Downloading\u2026';
+				status.textContent = '';
+				try {
+					const r = await fetch(`/api/firmware/bios/kernel/${encodeURIComponent(kernel)}/download`, {
+						method: 'POST', headers: getAuthHeaders()
+					});
+					if (r.ok) {
+						status.textContent = 'Download started\u2026';
+						const poll = setInterval(async () => {
+							try {
+								const sr = await fetch('/api/firmware/status', { headers: getAuthHeaders() });
+								const st = await sr.json();
+								if (!st.downloading) {
+									clearInterval(poll);
+									await loadKernelVersions();
+									dlBtn.disabled = false;
+									dlBtn.textContent = 'Download';
+								}
+							} catch(e) {}
+						}, 5000);
+					} else {
+						const err = await r.json().catch(() => ({}));
+						status.textContent = 'Error: ' + (err.error || r.statusText);
+						dlBtn.disabled = false;
+						dlBtn.textContent = 'Download';
+					}
+				} catch(e) {
+					status.textContent = 'Error: ' + e.message;
+					dlBtn.disabled = false;
+					dlBtn.textContent = 'Download';
+				}
+			};
+
+			window.activateKernelBIOS = async function() {
+				const select = document.getElementById('bios-kernel-select');
+				const kernel = select.value;
+				if (!kernel) return;
+				if (!confirm(`Activate U-Boot for Linux ${kernel}? Env files (machine.env, persistent.env, once.env) will be preserved.`)) return;
+				const actBtn = document.getElementById('btn-kernel-activate');
+				const status = document.getElementById('bios-kernel-status');
+				actBtn.disabled = true;
+				actBtn.textContent = 'Activating\u2026';
+				status.textContent = '';
+				try {
+					const r = await fetch(`/api/firmware/bios/kernel/${encodeURIComponent(kernel)}/activate`, {
+						method: 'POST', headers: getAuthHeaders()
+					});
+					if (r.ok) {
+						status.textContent = '\u2605 Activated';
+						status.style.color = '#22c55e';
+						actBtn.style.display = 'none';
+						loadFirmwareInfo();
+						loadBIOSVersion();
+						await loadKernelVersions();
+					} else {
+						const err = await r.json().catch(() => ({}));
+						status.textContent = 'Error: ' + (err.error || r.statusText);
+						actBtn.disabled = false;
+						actBtn.textContent = 'Activate';
+					}
+				} catch(e) {
+					status.textContent = 'Error: ' + e.message;
+					actBtn.disabled = false;
+					actBtn.textContent = 'Activate';
+				}
+			};
+
 			// Auto-connect serial
 			window.connectSerial();
 		</script>

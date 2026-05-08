@@ -179,6 +179,18 @@ templ ServerOverview() {
 						<button class="toolbar-btn" id="btn-fw-download" onclick="downloadFirmware()">Download</button>
 					</div>
 				</div>
+
+				<div class="ov-block">
+					<div class="ov-block-label">Kernel Version</div>
+					<div class="ov-controls" style="flex-wrap:wrap; gap:0.375rem;">
+						<select id="bios-kernel-select" class="ov-select" onchange="updateKernelButtons()" style="flex:1; min-width:10rem;">
+							<option value="">Select kernel version…</option>
+						</select>
+						<button class="toolbar-btn" id="btn-kernel-download" style="display:none" onclick="downloadKernelBIOS()">Download</button>
+						<button class="toolbar-btn" id="btn-kernel-activate" style="display:none" onclick="activateKernelBIOS()">Activate</button>
+					</div>
+					<div id="bios-kernel-status" class="ov-status-text" style="margin-top:0.25rem;"></div>
+				</div>
 			</section>
 		</div>
 		</div>

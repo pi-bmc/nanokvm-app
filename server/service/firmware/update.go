@@ -288,3 +288,206 @@ func decompressXZTo(src, dest string) error {
 	log.Infof("firmware: decompressed %d bytes", written)
 	return out.Sync()
 }
+
+// ---------------------------------------------------------------------------
+// Versioned image management
+// ---------------------------------------------------------------------------
+
+// versionedImagePath returns the on-disk path for a versioned u-boot image.
+// e.g. version "v2026.04" → "/data/firmware/uboot-v2026.04.img".
+func (c *Controller) versionedImagePath(version string) string {
+	// Normalise: ensure leading "v", replace any path-unsafe characters.
+	v := version
+	if !strings.HasPrefix(v, "v") {
+		v = "v" + v
+	}
+	v = strings.NewReplacer("/", "-", " ", "-", ":", "-").Replace(v)
+	return filepath.Join(filepath.Dir(c.imagePath), "uboot-"+v+".img")
+}
+
+// VersionedImageExists reports whether a locally cached versioned image for
+// the given u-boot version exists on disk.
+func (c *Controller) VersionedImageExists(version string) bool {
+	p := c.versionedImagePath(version)
+	info, err := os.Stat(p)
+	return err == nil && info.Size() > 0
+}
+
+// DownloadVersionedImage fetches and decompresses the u-boot image for the
+// given version+URL into a versioned cache file (e.g. uboot-v2026.04.img).
+// It does NOT replace the currently active image. Idempotent: if the file
+// already exists it returns immediately. Safe to call from a goroutine.
+func (c *Controller) DownloadVersionedImage(version, assetURL string) error {
+	// Quick existence check before acquiring the sentinel.
+	destPath := c.versionedImagePath(version)
+	if info, err := os.Stat(destPath); err == nil && info.Size() > 0 {
+		log.Infof("firmware: versioned image for %s already cached at %s", version, destPath)
+		return nil
+	}
+
+	// Use the shared sentinel so versioned and active-image downloads are
+	// mutually exclusive (prevents bandwidth/disk contention).
+	if _, err := os.Stat(downloadSentinel); err == nil {
+		return fmt.Errorf("download already in progress")
+	}
+	if err := os.WriteFile(downloadSentinel, []byte("downloading"), 0o644); err != nil {
+		return fmt.Errorf("create sentinel: %w", err)
+	}
+	defer os.Remove(downloadSentinel)
+
+	imageDir := filepath.Dir(c.imagePath)
+	if err := os.MkdirAll(imageDir, 0o755); err != nil {
+		return fmt.Errorf("create image dir: %w", err)
+	}
+
+	stageDir := filepath.Join(imageDir, "stage")
+	if err := os.MkdirAll(stageDir, 0o755); err != nil {
+		return fmt.Errorf("create stage dir: %w", err)
+	}
+	// Use a version-specific stage name to avoid collisions.
+	safeVer := strings.NewReplacer("/", "-", " ", "-", ":", "-").Replace(version)
+	xzPath := filepath.Join(stageDir, "ver-"+safeVer+".img.xz")
+	imgPath := filepath.Join(stageDir, "ver-"+safeVer+".img")
+	defer func() {
+		_ = os.Remove(xzPath)
+		_ = os.Remove(imgPath)
+	}()
+
+	log.Infof("firmware: downloading versioned u-boot %s from %s", version, assetURL)
+	if err := downloadFileTo(assetURL, xzPath); err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+	log.Infof("firmware: decompressing versioned image for %s", version)
+	if err := decompressXZTo(xzPath, imgPath); err != nil {
+		return fmt.Errorf("decompress: %w", err)
+	}
+	if err := copyFileContents(imgPath, destPath); err != nil {
+		return fmt.Errorf("install versioned image: %w", err)
+	}
+	_ = exec.Command("sync").Run()
+	log.Infof("firmware: versioned image %s stored at %s", version, destPath)
+	return nil
+}
+
+// ActivateVersionedImage swaps the versioned image for the given u-boot
+// version into the active image slot (c.imagePath), preserving the three
+// env files from the current active image. The versioned cache file is kept
+// so it can be re-activated later without re-downloading.
+func (c *Controller) ActivateVersionedImage(version string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	srcPath := c.versionedImagePath(version)
+	if info, err := os.Stat(srcPath); err != nil || info.Size() == 0 {
+		return fmt.Errorf("versioned image for %s not found; download it first", version)
+	}
+
+	// 1. Snapshot env files from the current active image (best-effort).
+	preserved := make(map[string][]byte)
+	if c.imageExists() {
+		for _, p := range envFileFATPaths {
+			data, err := c.readFileFresh(p)
+			if err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					log.Warnf("firmware: pre-activate read %s: %v", p, err)
+				}
+				continue
+			}
+			preserved[p] = data
+			log.Debugf("firmware: preserved %s (%d bytes)", p, len(data))
+		}
+	}
+
+	// 2. Swap the versioned image into the active slot.
+	if err := c.swapActiveLocked(srcPath); err != nil {
+		return err
+	}
+
+	// 3. Restore env files into the new active image.
+	if len(preserved) > 0 {
+		if err := c.withMount(func() error {
+			for fatPath, data := range preserved {
+				dest := filepath.Join(c.mountPoint, filepath.FromSlash(strings.TrimPrefix(fatPath, "/")))
+				if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+					return fmt.Errorf("mkdir %s: %w", filepath.Dir(dest), err)
+				}
+				if err := os.WriteFile(dest, data, 0o644); err != nil {
+					return fmt.Errorf("restore %s: %w", dest, err)
+				}
+				log.Infof("firmware: restored %s (%d bytes)", path.Base(fatPath), len(data))
+			}
+			return nil
+		}); err != nil {
+			log.Warnf("firmware: env restore after activate failed: %v", err)
+			return fmt.Errorf("restore envs: %w", err)
+		}
+	}
+
+	log.Infof("firmware: activated versioned image %s → %s", version, c.imagePath)
+	InvalidateLatestUBootCache()
+	return nil
+}
+
+// swapActiveLocked copies srcPath over c.imagePath, handling gadget/loop
+// bookkeeping. Must hold c.mu.
+func (c *Controller) swapActiveLocked(srcPath string) error {
+	wasPresented := c.presented
+	if wasPresented {
+		if err := c.unpresentImage(); err != nil {
+			log.Warnf("firmware: pre-activate unpresent: %v", err)
+		}
+	}
+	hadLoop := c.loopDev != ""
+	if hadLoop {
+		if err := c.detachLoopLocked(); err != nil {
+			log.Warnf("firmware: pre-activate loop detach: %v", err)
+		}
+	}
+	c.invalidateReaderCacheLocked()
+
+	if err := copyFileContents(srcPath, c.imagePath); err != nil {
+		// Best-effort restore of gadget state before returning the error.
+		if hadLoop {
+			_ = c.attachLoopLocked()
+		}
+		if wasPresented {
+			_ = c.presentImage()
+		}
+		return fmt.Errorf("swap active image: %w", err)
+	}
+	_ = exec.Command("sync").Run()
+
+	if hadLoop {
+		if err := c.attachLoopLocked(); err != nil {
+			log.Warnf("firmware: post-activate loop reattach: %v", err)
+		}
+	}
+	if wasPresented {
+		if err := c.presentImage(); err != nil {
+			log.Warnf("firmware: post-activate present: %v", err)
+		}
+	}
+	return nil
+}
+
+// copyFileContents copies src to dst byte-for-byte, creating/overwriting dst.
+func copyFileContents(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src: %w", err)
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("create dst: %w", err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return fmt.Errorf("copy: %w", err)
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return fmt.Errorf("sync: %w", err)
+	}
+	return out.Close()
+}
