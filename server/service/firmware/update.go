@@ -241,6 +241,32 @@ func downloadFileTo(url, dest string) error {
 }
 
 func decompressXZTo(src, dest string) error {
+	// Prefer the native xz binary if available — pure-Go xz decoding is
+	// very slow on embedded RISC-V (multi-minute) for typical u-boot images.
+	if xzBin, err := exec.LookPath("xz"); err == nil {
+		log.Infof("firmware: decompressing with %s", xzBin)
+		out, err := os.Create(dest)
+		if err != nil {
+			return fmt.Errorf("create output: %w", err)
+		}
+		defer out.Close()
+		cmd := exec.Command(xzBin, "-dc", "--", src)
+		cmd.Stdout = out
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("xz decompress: %w: %s", err, strings.TrimSpace(stderr.String()))
+		}
+		if err := out.Sync(); err != nil {
+			return fmt.Errorf("sync output: %w", err)
+		}
+		if st, err := os.Stat(dest); err == nil {
+			log.Infof("firmware: decompressed %d bytes", st.Size())
+		}
+		return nil
+	}
+
+	log.Info("firmware: native xz unavailable, falling back to pure-Go decoder (slow)")
 	in, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("open xz: %w", err)
@@ -255,8 +281,10 @@ func decompressXZTo(src, dest string) error {
 		return fmt.Errorf("create output: %w", err)
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, r); err != nil {
+	written, err := io.Copy(out, r)
+	if err != nil {
 		return fmt.Errorf("xz decompress: %w", err)
 	}
+	log.Infof("firmware: decompressed %d bytes", written)
 	return out.Sync()
 }
