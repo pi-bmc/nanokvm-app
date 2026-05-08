@@ -4,16 +4,15 @@
 [ -x /usr/bin/ssh-keygen ] || exit 0
 [ -x /usr/sbin/sshd ] || exit 1
 
-PIDFILE="/var/run/sshd.pid"
+PID_FILE="/var/run/sshd.pid"
 
 umask 077
 
 startssh() {
     [ ! -f /etc/ssh/ssh_host_rsa_key ] && /usr/bin/ssh-keygen -A
     printf "Starting sshd: "
-    /usr/sbin/sshd
-    touch /var/lock/sshd
-    echo "OK"
+    start-stop-daemon -S -q -x /usr/sbin/sshd \
+        && echo "OK" || echo "FAIL"
 }
 
 start() {
@@ -32,11 +31,8 @@ start() {
 
 stop() {
     printf "Stopping sshd: "
-    if [ -f "$PIDFILE" ]; then
-        kill "$(cat "$PIDFILE")" 2>/dev/null
-    fi
-    rm -f /var/lock/sshd
-    echo "OK"
+    start-stop-daemon -K -q -p "$PID_FILE" -x /usr/sbin/sshd \
+        && echo "OK" || echo "FAIL"
 }
 
 case "$1" in
