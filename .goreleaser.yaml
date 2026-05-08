@@ -1,13 +1,8 @@
 version: 2
 
-env:
-  - REGISTRY={{ envOrDefault "REGISTRY" "ghcr.io" }}
-  - IS_RELEASE={{ envOrDefault "IS_RELEASE" "false" }}
-
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
     - bash -c "echo '{{ .Version }}' > version"
 
 builds:
@@ -19,19 +14,6 @@ builds:
       - linux
     goarch:
       - riscv64
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
-
-  - id: fw_env
-    env: ["CGO_ENABLED=0"]
-    main: ./cmd/fw_env
-    binary: fw_env
-    goos:
-      - linux
-    goarch:
-      - riscv64
-    ldflags:
-      - -s -w
 
 upx:
   - enabled: false
@@ -40,7 +22,6 @@ archives:
   - id: nanokvm
     ids:
       - server
-      - fw_env
     formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
@@ -69,4 +50,4 @@ snapshot:
   version_template: "{{ .Version }}-next"
 
 changelog:
-  disable: '{{ if eq .Env.IS_RELEASE "true" }}false{{ else }}true{{ end }}'
+  disable: "{{ .IsSnapshot }}"
