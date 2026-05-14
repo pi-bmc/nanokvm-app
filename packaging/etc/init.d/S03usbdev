@@ -6,7 +6,7 @@ start_usb_dev(){
     echo "usb mode: device"
     cd /sys/kernel/config/usb_gadget
 
-    mkdir g0
+    mkdir -p g0
     cd g0
 
     # echo 0x3346 > idVendor
@@ -23,26 +23,26 @@ start_usb_dev(){
     else
         echo 0x1009 > idProduct
     fi
-    mkdir strings/0x409
+    mkdir -p strings/0x409
     echo '0123456789ABCDEF' > strings/0x409/serialnumber
     echo 'sipeed' > strings/0x409/manufacturer
     echo 'NanoKVM' > strings/0x409/product
 
-    mkdir configs/c.1
+    mkdir -p configs/c.1
     echo 0xE0 > configs/c.1/bmAttributes
     echo 120 > configs/c.1/MaxPower
-    mkdir configs/c.1/strings/0x409
+    mkdir -p configs/c.1/strings/0x409
     echo "NanoKVM" >  configs/c.1/strings/0x409/configuration
 
     if [ -e /boot/usb.ncm ]
     then
-        mkdir functions/ncm.usb0
-        ln -s functions/ncm.usb0 configs/c.1/
+        mkdir -p functions/ncm.usb0
+        [ -L configs/c.1/ncm.usb0 ] || ln -s functions/ncm.usb0 configs/c.1/
     else
         if [ -e /boot/usb.rndis0 ]
         then
-                mkdir functions/rndis.usb0
-                ln -s functions/rndis.usb0 configs/c.1/
+                mkdir -p functions/rndis.usb0
+                [ -L configs/c.1/rndis.usb0 ] || ln -s functions/rndis.usb0 configs/c.1/
         fi
     fi
 
@@ -107,13 +107,38 @@ start_usb_dev(){
     #
     #   lun.1 — virtual CD-ROM slot for ISO media. Always present so the
     #           server can insert/eject ISOs by writing lun.1/file without
-    #           having to unbind+rebind the UDC to add a LUN at runtime
-    #           (f_mass_storage does not allow adding LUN directories after
-    #           the function is linked into a configuration).
-    #           cdrom=1 → 2048-byte El Torito mode, which UEFI/BIOS targets
-    #           boot from directly (no FAT sector-size mismatch).
-    mkdir functions/mass_storage.disk0
-    ln -s functions/mass_storage.disk0 configs/c.1/
+    #           having to unbind+rebind the UDC at runtime.
+    mkdir -p functions/mass_storage.disk0
+
+    # ----- lun.1: virtual media (CD-ROM, El Torito) -----
+    # MUST be created BEFORE linking mass_storage.disk0 into configs/c.1.
+    # On this kernel (SG2002 / Sophgo), fsg_bind() is triggered when the
+    # function group is attached to a configuration — not just when the UDC
+    # is bound. Once fsg_bind() runs it sets common->running, and any
+    # subsequent fsg_lun_make() call returns EBUSY. Creating all LUN
+    # directories while the function is still detached from the config avoids
+    # EBUSY entirely on first setup.
+    #
+    # Re-run / recovery path: if lun.1 is absent but the function is already
+    # linked (i.e. a previous start succeeded), we need to unbind the UDC
+    # before creating the directory, then let the final bind block below
+    # re-attach it.
+    if [ ! -d functions/mass_storage.disk0/lun.1 ]; then
+        if [ -L configs/c.1/mass_storage.disk0 ]; then
+            udc_name=$(cat UDC 2>/dev/null | tr -d '[:space:]' || true)
+            if [ -n "$udc_name" ]; then
+                echo "" > UDC 2>/dev/null || true
+                sleep 1
+            fi
+        fi
+        mkdir functions/mass_storage.disk0/lun.1
+        echo 1 > functions/mass_storage.disk0/lun.1/cdrom
+        echo 1 > functions/mass_storage.disk0/lun.1/ro
+        echo 1 > functions/mass_storage.disk0/lun.1/removable
+        echo "NanoKVM Virtual Media   0100" > functions/mass_storage.disk0/lun.1/inquiry_string
+    fi
+
+    [ -L configs/c.1/mass_storage.disk0 ] || ln -s functions/mass_storage.disk0 configs/c.1/
 
     # ----- lun.0: boot firmware image -----
     echo 1 > functions/mass_storage.disk0/lun.0/removable
@@ -144,15 +169,11 @@ start_usb_dev(){
             # will populate it with the firmware image at startup.
     fi
 
-    # ----- lun.1: virtual media (CD-ROM, El Torito) -----
-    mkdir functions/mass_storage.disk0/lun.1
-    echo 1 > functions/mass_storage.disk0/lun.1/cdrom
-    echo 1 > functions/mass_storage.disk0/lun.1/ro
-    echo 1 > functions/mass_storage.disk0/lun.1/removable
-    echo "NanoKVM Virtual Media   0100" > functions/mass_storage.disk0/lun.1/inquiry_string
-
     if [ ! -e /boot/udc.disable ]; then
-        ls /sys/class/udc/ | cat > UDC
+        # Bind if not already bound (also re-binds after any unbind above).
+        if [ -z "$(cat UDC 2>/dev/null | tr -d '[:space:]')" ]; then
+            ls /sys/class/udc/ | cat > UDC 2>/dev/null
+        fi
     fi
     echo device > /proc/cviusb/otg_role
 }
@@ -163,7 +184,7 @@ start_usb_host(){
 }
 
 restart_usb_dev(){
-    echo > /sys/kernel/config/usb_gadget/g0/UDC
+    echo "" > /sys/kernel/config/usb_gadget/g0/UDC
     sleep 1
     if [ ! -e /boot/udc.disable ]; then
         ls /sys/class/udc/ | cat > /sys/kernel/config/usb_gadget/g0/UDC
