@@ -33,3 +33,4 @@ kvmapp/kvm_system/kvm_system
 dist
 bin
 version
+out

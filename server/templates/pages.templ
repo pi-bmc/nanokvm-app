@@ -1,5 +1,28 @@
 package templates
 
+// CustomInput is a reusable text/password input component
+templ CustomInput(id, name, inputType, placeholder string, required bool) {
+	<input
+		id={ id }
+		name={ name }
+		type={ inputType }
+		if required {
+			required
+		}
+		minlength="1"
+		placeholder={ placeholder }
+		class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm placeholder-neutral-500 focus:border-blue-600 focus:outline-none"
+	/>
+}
+
+// CustomCheckbox is a reusable checkbox component
+templ CustomCheckbox(id string, label string, title string) {
+	<label class="flex items-center gap-1 text-xs text-neutral-400 cursor-pointer select-none" title={ title }>
+		<input id={ id } type="checkbox" class="rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-0 focus:ring-offset-0" onchange="onSearchInput()"/>
+		{ label }
+	</label>
+}
+
 // LoginPage is the server-rendered login page.
 templ LoginPage() {
 	@layout("NanoKVM - Login", false) {
@@ -16,26 +39,10 @@ templ LoginPage() {
 					/>
 				</div>
 				<div>
-					<input
-						id="username"
-						name="username"
-						type="text"
-						required
-						minlength="1"
-						placeholder="Username"
-						class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm placeholder-neutral-500 focus:border-blue-600 focus:outline-none"
-					/>
+					@CustomInput("username", "username", "text", "Username", true)
 				</div>
 				<div>
-					<input
-						id="password"
-						name="password"
-						type="password"
-						required
-						minlength="1"
-						placeholder="Password"
-						class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm placeholder-neutral-500 focus:border-blue-600 focus:outline-none"
-					/>
+					@CustomInput("password", "password", "password", "Password", true)
 				</div>
 				<div id="login-error" class="text-sm text-red-500" style="min-height:1.25rem"></div>
 				<button
@@ -163,37 +170,13 @@ templ PasswordPage(loggedIn bool) {
 			<h2 class="text-xl font-semibold text-neutral-100">Change Password</h2>
 			<form id="pw-form" class="w-full max-w-sm space-y-4 px-4" onsubmit="return handleChangePassword(event)">
 				<div>
-					<input
-						id="pw-username"
-						name="username"
-						type="text"
-						required
-						minlength="1"
-						placeholder="Username"
-						class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm placeholder-neutral-500 focus:border-blue-600 focus:outline-none"
-					/>
+					@CustomInput("pw-username", "username", "text", "Username", true)
 				</div>
 				<div>
-					<input
-						id="pw-password"
-						name="password"
-						type="password"
-						required
-						minlength="1"
-						placeholder="New Password"
-						class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm placeholder-neutral-500 focus:border-blue-600 focus:outline-none"
-					/>
+					@CustomInput("pw-password", "password", "password", "New Password", true)
 				</div>
 				<div>
-					<input
-						id="pw-confirm"
-						name="password2"
-						type="password"
-						required
-						minlength="1"
-						placeholder="Confirm Password"
-						class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm placeholder-neutral-500 focus:border-blue-600 focus:outline-none"
-					/>
+					@CustomInput("pw-confirm", "password2", "password", "Confirm Password", true)
 				</div>
 				<div id="pw-error" class="text-sm text-red-500" style="min-height:1.25rem"></div>
 				<div class="flex w-full space-x-2">
@@ -290,9 +273,9 @@ templ DashboardPage() {
 	@layout("NanoKVM BMC", true) {
 		<link rel="stylesheet" href="/css/xterm.min.css"/>
 		<style>
-			#console-pane { display: flex; flex-direction: column; height: 100%; }
+			#console-pane { display: flex; flex-direction: column; height: 100%; padding: 1rem; }
 			#console-pane.expanded { position: fixed; inset: 0; z-index: 40; background: #0a0a0a; }
-			#terminal-wrap { flex: 1; min-height: 0; position: relative; }
+			#terminal-wrap { flex: 1; min-height: 0; position: relative; border-radius: 0.5rem; overflow: hidden; }
 			#terminal { height: 100%; }
 			.console-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0.375rem 0.75rem; border-bottom: 1px solid #262626; background: #111; flex-shrink: 0; }
 			.console-toolbar .label { font-size: 0.75rem; color: #737373; }
@@ -340,35 +323,31 @@ templ DashboardPage() {
 					/>
 				</div>
 				<span id="search-count" class="text-xs text-neutral-500 min-w-[3rem] text-center select-none"></span>
-				<button
-					class="toolbar-btn"
-					onclick="findPrevious()"
-					title="Previous match (Shift+Enter)"
-				>
-					<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
-				</button>
-				<button
-					class="toolbar-btn"
-					onclick="findNext()"
-					title="Next match (Enter)"
-				>
-					<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-				</button>
-				<label class="flex items-center gap-1 text-xs text-neutral-400 cursor-pointer select-none" title="Case sensitive">
-					<input id="search-case" type="checkbox" class="rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-0 focus:ring-offset-0" onchange="onSearchInput()"/>
-					Aa
-				</label>
-				<label class="flex items-center gap-1 text-xs text-neutral-400 cursor-pointer select-none" title="Regular expression">
-					<input id="search-regex" type="checkbox" class="rounded border-neutral-600 bg-neutral-800 text-blue-600 focus:ring-0 focus:ring-offset-0" onchange="onSearchInput()"/>
-					.*
-				</label>
-				<button
-					class="toolbar-btn"
-					onclick="closeSearch()"
-					title="Close (Esc)"
-				>
-					<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-				</button>
+				<div class="flex items-center gap-2 ml-auto">
+					@CustomCheckbox("search-case", "Aa", "Case sensitive")
+					@CustomCheckbox("search-regex", ".*", "Regular expression")
+					<button
+						class="toolbar-btn"
+						onclick="findPrevious()"
+						title="Previous match (Shift+Enter)"
+					>
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+					</button>
+					<button
+						class="toolbar-btn"
+						onclick="findNext()"
+						title="Next match (Enter)"
+					>
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+					</button>
+					<button
+						class="toolbar-btn"
+						onclick="closeSearch()"
+						title="Close (Esc)"
+					>
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+					</button>
+				</div>
 			</div>
 			<div id="terminal-wrap">
 				<div id="terminal"></div>
@@ -964,10 +943,12 @@ templ DashboardPage() {
 				if (!select) return;
 				const opt = select.options[select.selectedIndex];
 				const dlBtn = document.getElementById('btn-kernel-download');
+				const rfBtn = document.getElementById('btn-kernel-refresh');
 				const actBtn = document.getElementById('btn-kernel-activate');
 				const status = document.getElementById('bios-kernel-status');
 				if (!opt || !opt.value) {
 					dlBtn.style.display = 'none';
+					if (rfBtn) rfBtn.style.display = 'none';
 					actBtn.style.display = 'none';
 					status.textContent = '';
 					return;
@@ -975,6 +956,7 @@ templ DashboardPage() {
 				const downloaded = !!opt.dataset.downloaded;
 				const active = !!opt.dataset.active;
 				dlBtn.style.display = downloaded ? 'none' : '';
+				if (rfBtn) rfBtn.style.display = downloaded ? '' : 'none';
 				actBtn.style.display = (downloaded && !active) ? '' : 'none';
 				status.textContent = active ? '\u2605 Active' : '';
 				status.style.color = active ? '#22c55e' : '#71717a';
@@ -1017,6 +999,51 @@ templ DashboardPage() {
 					status.textContent = 'Error: ' + e.message;
 					dlBtn.disabled = false;
 					dlBtn.textContent = 'Download';
+				}
+			};
+
+			window.refreshKernelBIOS = async function() {
+				const select = document.getElementById('bios-kernel-select');
+				const kernel = select.value;
+				if (!kernel) return;
+				const opt = select.options[select.selectedIndex];
+				const ubootVer = opt ? opt.textContent.match(/U-Boot (\S+)/)?.[1] || kernel : kernel;
+				if (!confirm(`Re-download U-Boot image for Linux ${kernel} (${ubootVer})? The existing cached image will be overwritten.`)) return;
+				const rfBtn = document.getElementById('btn-kernel-refresh');
+				const status = document.getElementById('bios-kernel-status');
+				rfBtn.disabled = true;
+				rfBtn.textContent = 'Downloading\u2026';
+				status.textContent = '';
+				try {
+					const r = await fetch(`/api/firmware/bios/kernel/${encodeURIComponent(kernel)}/download?force=true`, {
+						method: 'POST', headers: getAuthHeaders()
+					});
+					if (r.ok) {
+						status.textContent = 'Re-downloading\u2026';
+						const poll = setInterval(async () => {
+							try {
+								const sr = await fetch('/api/firmware/status', { headers: getAuthHeaders() });
+								const st = await sr.json();
+								if (!st.downloading) {
+									clearInterval(poll);
+									status.textContent = 'Image refreshed.';
+									setTimeout(() => { status.textContent = ''; }, 4000);
+									await loadKernelVersions();
+									rfBtn.disabled = false;
+									rfBtn.textContent = '\u21BB Refresh';
+								}
+							} catch(e) {}
+						}, 5000);
+					} else {
+						const err = await r.json().catch(() => ({}));
+						status.textContent = 'Error: ' + (err.error || r.statusText);
+						rfBtn.disabled = false;
+						rfBtn.textContent = '\u21BB Refresh';
+					}
+				} catch(e) {
+					status.textContent = 'Error: ' + e.message;
+					rfBtn.disabled = false;
+					rfBtn.textContent = '\u21BB Refresh';
 				}
 			};
 

@@ -238,15 +238,17 @@ func buildIPMI15Wrapper(ipmiMsg []byte) []byte {
 }
 
 // buildIPMIMsg builds an IPMI response message with proper checksums.
-func buildIPMIMsg(rqAddr byte, respNetFnLUN byte, rqSeq byte, cmd byte, data []byte) []byte {
+// bmc_addr is the BMC's address (from request's RsAddr, becomes response RsAddr).
+// rq_origin_addr is the requester's address (from request's RqAddr, becomes response RqAddr).
+func buildIPMIMsg(bmc_addr byte, rq_origin_addr byte, respNetFnLUN byte, rqSeq byte, cmd byte, data []byte) []byte {
 	totalLen := 7 + len(data)
 	msg := make([]byte, totalLen)
 
-	msg[0] = rqAddr
+	msg[0] = bmc_addr
 	msg[1] = respNetFnLUN
 	msg[2] = ipmiChecksum(msg[0:2])
-	msg[3] = bmcSlaveAddr
-	msg[4] = rqSeq << 2
+	msg[3] = rq_origin_addr
+	msg[4] = (rqSeq << 2) | (respNetFnLUN & 0x03)
 	msg[5] = cmd
 	copy(msg[6:6+len(data)], data)
 	msg[totalLen-1] = ipmiChecksum(msg[3 : totalLen-1])

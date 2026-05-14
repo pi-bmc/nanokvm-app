@@ -187,6 +187,7 @@ templ ServerOverview() {
 							<option value="">Select kernel version…</option>
 						</select>
 						<button class="toolbar-btn" id="btn-kernel-download" style="display:none" onclick="downloadKernelBIOS()">Download</button>
+						<button class="toolbar-btn" id="btn-kernel-refresh" style="display:none" onclick="refreshKernelBIOS()" title="Re-download to overwrite existing cached image">&#8635; Refresh</button>
 						<button class="toolbar-btn" id="btn-kernel-activate" style="display:none" onclick="activateKernelBIOS()">Activate</button>
 					</div>
 					<div id="bios-kernel-status" class="ov-status-text" style="margin-top:0.25rem;"></div>
