@@ -80,11 +80,11 @@ func (s *Service) GetManager(c *gin.Context) {
 // path (sub-17G) rather than the 17G Settings-URI flow we don't have.
 func (s *Service) GetDellIDRACAttributes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#DellAttributes.v1_0_0.DellAttributes",
-		"@odata.id":      "/redfish/v1/Managers/1/Oem/Dell/DellAttributes/iDRAC.Embedded.1",
-		"@odata.context": "/redfish/v1/$metadata#DellAttributes.DellAttributes",
-		"Id":             "iDRAC.Embedded.1",
-		"Name":           "iDRAC Attributes",
+		"@odata.type":       "#DellAttributes.v1_0_0.DellAttributes",
+		"@odata.id":         "/redfish/v1/Managers/1/Oem/Dell/DellAttributes/iDRAC.Embedded.1",
+		"@odata.context":    "/redfish/v1/$metadata#DellAttributes.DellAttributes",
+		"Id":                "iDRAC.Embedded.1",
+		"Name":              "iDRAC Attributes",
 		"AttributeRegistry": "ManagerAttributeRegistry.v1_0_0",
 		"Attributes": gin.H{
 			"Info.1.ServerGen": "14G",
