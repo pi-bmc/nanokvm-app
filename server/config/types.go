@@ -26,14 +26,14 @@ type Config struct {
 // enabled. Disabled by default — opt-in via config or the settings dialog.
 type AutoUpdate struct {
 	// Enabled gates the whole subsystem; when false the ticker doesn't run.
-	Enabled bool `yaml:"enabled"`
+	Enabled bool `yaml:"enabled" json:"enabled"`
 	// IntervalMinutes between check-and-apply runs. Clamped to >= 5 at runtime
 	// so a misconfigured value can't hammer GitHub.
-	IntervalMinutes int `yaml:"intervalMinutes"`
+	IntervalMinutes int `yaml:"intervalMinutes" json:"intervalMinutes"`
 	// Application toggles auto-updating the NanoKVM application package.
-	Application bool `yaml:"application"`
+	Application bool `yaml:"application" json:"application"`
 	// BIOS toggles auto-updating the U-Boot BIOS image.
-	BIOS bool `yaml:"bios"`
+	BIOS bool `yaml:"bios" json:"bios"`
 }
 
 // Telemetry holds OpenTelemetry + Prometheus configuration.
