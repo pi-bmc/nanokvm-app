@@ -204,6 +204,10 @@ templ overviewBiosCard() {
 				}
 			</div>
 			@DownloadProgress("fw-download")
+			<div class="flex items-center justify-between w-full">
+				<span class="text-xs text-muted-foreground">RPi 5 bootloader EEPROM</span>
+				@EEPROMDialogTrigger()
+			</div>
 		}
 	}
 }

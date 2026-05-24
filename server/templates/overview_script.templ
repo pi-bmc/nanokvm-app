@@ -389,16 +389,21 @@ templ overviewDataScript() {
 			if (!kernel) return;
 			const item = selectedKernelItem();
 			const ubootVer = item ? item.textContent.match(/U-Boot (\S+)/)?.[1] || kernel : kernel;
-			if (!confirm(`Re-download U-Boot image for Linux ${kernel} (${ubootVer})? The existing cached image will be overwritten.`)) return;
+			const isActive = !!item?.dataset.active;
+			const prompt = isActive
+				? `Re-download U-Boot image for Linux ${kernel} (${ubootVer})? It's currently active — the new image will replace the active one (env files preserved).`
+				: `Re-download U-Boot image for Linux ${kernel} (${ubootVer})? The existing cached image will be overwritten.`;
+			if (!confirm(prompt)) return;
 			const rfBtn = document.getElementById('btn-kernel-refresh');
 			rfBtn.disabled = true;
-			dlProgress.start('kernel', 'Re-downloading image…');
+			dlProgress.start('kernel', isActive ? 'Re-downloading + reactivating…' : 'Re-downloading image…');
 			try {
 				const r = await fetch(`/api/firmware/bios/kernel/${encodeURIComponent(kernel)}/download?force=true`, {
 					method: 'POST', headers: getAuthHeaders()
 				});
 				if (r.ok) {
-					pollKernelDownload(rfBtn, 'Image refreshed');
+					const doneLabel = isActive ? 'Image refreshed + reactivated' : 'Image refreshed';
+					pollKernelDownload(rfBtn, doneLabel);
 				} else {
 					const err = await r.json().catch(() => ({}));
 					dlProgress.fail('kernel', 'Error: ' + (err.error || r.statusText));

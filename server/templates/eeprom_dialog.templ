@@ -1,0 +1,347 @@
+package templates
+
+import (
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/components/textarea"
+)
+
+// EEPROMDialogTrigger is a small inline button intended for an overview
+// card footer. Clicking it opens the EEPROMDialog modal.
+templ EEPROMDialogTrigger() {
+	@dialog.Trigger(dialog.TriggerProps{For: "eeprom-dialog"}) {
+		@button.Button(button.Props{
+			Variant:    button.VariantOutline,
+			Size:       button.SizeSm,
+			Attributes: templ.Attributes{"onclick": "loadEEPROMConfig()"},
+		}) {
+			@icon.Cog()
+			<span>Edit EEPROM…</span>
+		}
+	}
+}
+
+// EEPROMDialog is the RPi 5 bootloader EEPROM editor: a raw text editor on
+// the left, a parsed read-only preview on the right (grouped by section).
+// Save writes back via PUT /api/firmware/eeprom; the bootloader applies it
+// on the next boot.
+//
+// Rendered once at the root (alongside SettingsDialog) so its DOM is in
+// scope for the trigger.
+templ EEPROMDialog() {
+	@dialog.Dialog(dialog.Props{ID: "eeprom-dialog"}) {
+		@dialog.Content(dialog.ContentProps{Class: "max-w-3xl"}) {
+			@dialog.Header() {
+				@dialog.Title() {
+					<div class="flex items-center gap-2">
+						<span>EEPROM Configuration</span>
+						// Pending badge: shown only when a staged
+						// pieeprom.upd is present. Driven by the load
+						// handler below; default hidden.
+						@badge.Badge(badge.Props{
+							ID:      "eeprom-pending-badge",
+							Variant: badge.VariantSecondary,
+							Class:   "hidden bg-yellow-500/15 text-yellow-500",
+						}) {
+							Pending update
+						}
+					</div>
+				}
+				@dialog.Description() {
+					RPi 5 bootloader settings, edited via the same <code class="rounded bg-muted px-1 text-foreground">bootconf.txt</code> section <code class="rounded bg-muted px-1 text-foreground">rpi-eeprom-config</code> manipulates. Saved changes stage <code class="rounded bg-muted px-1 text-foreground">pieeprom.upd</code> on the firmware image; the host's <code class="rounded bg-muted px-1 text-foreground">rpi-eeprom-update</code> flashes the EEPROM on the next boot.
+				}
+			}
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+				<div class="space-y-1.5">
+					<div class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Editor</div>
+					@textarea.Textarea(textarea.Props{
+						ID:          "eeprom-editor",
+						Name:        "content",
+						Placeholder: "[all]\nBOOT_UART=1\nBOOT_ORDER=0xf41\n",
+						Rows:        16,
+						Class:       "font-mono text-xs",
+					})
+					<p id="eeprom-status" class="text-[0.6875rem] text-muted-foreground min-h-[1rem]"></p>
+				</div>
+				<div class="space-y-1.5">
+					<div class="flex items-center justify-between">
+						<div class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parsed Settings</div>
+						@button.Button(button.Props{
+							Variant:    button.VariantGhost,
+							Size:       button.SizeSm,
+							Class:      "h-6 px-2 text-xs",
+							Attributes: templ.Attributes{"onclick": "refreshEEPROMPreview()", "title": "Re-parse editor contents"},
+						}) {
+							@icon.RefreshCw()
+							<span>Re-parse</span>
+						}
+					</div>
+					<div id="eeprom-preview" class="h-[26rem] overflow-y-auto rounded-md border border-border bg-card p-3 text-xs space-y-3">
+						<p class="text-muted-foreground italic">Load to populate.</p>
+					</div>
+				</div>
+			</div>
+			@dialog.Footer() {
+				@dialog.Close() {
+					@button.Button(button.Props{Variant: button.VariantOutline}) {
+						Cancel
+					}
+				}
+				// Discard-pending button only meaningful when an update is
+				// staged. Hidden until loadEEPROMConfig flips it on.
+				@button.Button(button.Props{
+					ID:         "eeprom-discard",
+					Variant:    button.VariantDestructive,
+					Class:      "hidden",
+					Attributes: templ.Attributes{"onclick": "discardPendingEEPROM()", "title": "Remove pieeprom.upd; revert to the live config"},
+				}) {
+					Discard pending
+				}
+				// Force a re-download of the latest upstream pieeprom-*.bin
+				// from raspberrypi/rpi-eeprom into the FAT (replaces
+				// pieeprom.bin). Useful for picking up a new release.
+				@button.Button(button.Props{
+					ID:         "eeprom-refresh-bin",
+					Variant:    button.VariantOutline,
+					Attributes: templ.Attributes{"onclick": "refreshPieepromBin()", "title": "Re-download latest pieeprom.bin from raspberrypi/rpi-eeprom"},
+				}) {
+					Refresh image
+				}
+				@button.Button(button.Props{
+					Variant:    button.VariantOutline,
+					Attributes: templ.Attributes{"onclick": "loadEEPROMConfig()", "title": "Reload from device"},
+				}) {
+					Reload
+				}
+				@button.Button(button.Props{
+					ID:         "eeprom-save",
+					Attributes: templ.Attributes{"onclick": "saveEEPROMConfig()"},
+				}) {
+					Save
+				}
+			}
+		}
+	}
+	@textarea.Script()
+	@eepromDialogScript()
+}
+
+templ eepromDialogScript() {
+	<script>
+		(function() {
+			const editor  = () => document.getElementById('eeprom-editor');
+			const preview = () => document.getElementById('eeprom-preview');
+			const status  = () => document.getElementById('eeprom-status');
+			const saveBtn = () => document.getElementById('eeprom-save');
+
+			function setStatus(msg, cls) {
+				const s = status();
+				if (!s) return;
+				s.textContent = msg || '';
+				s.classList.remove('text-destructive', 'text-green-500', 'text-muted-foreground');
+				s.classList.add(cls || 'text-muted-foreground');
+			}
+
+			// renderPreview mirrors EEPROMConfigSummary returned by the API:
+			// { raw, sections: { [name]: [{section,key,value}, ...] }, order: [...] }
+			// We accept either a parsed payload (from API) or a string (for
+			// in-editor re-parse) — in the string case the server isn't
+			// re-hit; we just rebuild the visual.
+			function renderPreview(summary) {
+				const pv = preview();
+				if (!pv) return;
+				const order = summary.order || [];
+				if (order.length === 0) {
+					pv.innerHTML = '<p class="text-muted-foreground italic">No settings parsed.</p>';
+					return;
+				}
+				const parts = [];
+				for (const name of order) {
+					const rows = (summary.sections && summary.sections[name]) || [];
+					parts.push(`<div><div class="text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground mb-1">[${escapeHTML(name)}]</div>`);
+					parts.push('<div class="space-y-0.5">');
+					for (const r of rows) {
+						parts.push(`<div class="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5"><span class="font-mono">${escapeHTML(r.key)}</span><span class="font-mono text-muted-foreground text-right break-all">${escapeHTML(r.value)}</span></div>`);
+					}
+					parts.push('</div></div>');
+				}
+				pv.innerHTML = parts.join('');
+			}
+
+			function escapeHTML(s) {
+				return String(s).replace(/[&<>"']/g, (c) => ({
+					'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+				}[c]));
+			}
+
+			// Pure client-side parse used by Re-parse (mirrors firmware.ParseEEPROMConfig).
+			function parseClient(text) {
+				const order = [], sections = {}, seen = new Set();
+				let section = 'all';
+				for (let line of (text || '').split(/\r?\n/)) {
+					line = line.trim();
+					if (!line || line.startsWith('#')) continue;
+					if (line.startsWith('[') && line.endsWith(']')) {
+						section = line.slice(1, -1).trim() || 'all';
+						continue;
+					}
+					const eq = line.indexOf('=');
+					if (eq <= 0) continue;
+					const key = line.slice(0, eq).trim();
+					const value = line.slice(eq + 1).trim();
+					if (!key) continue;
+					if (!seen.has(section)) { seen.add(section); order.push(section); }
+					(sections[section] ||= []).push({ section, key, value });
+				}
+				return { raw: text, sections, order };
+			}
+
+			// applyPendingChrome flips the pending badge + discard button
+			// based on the summary's `pending`/`source` fields.
+			function applyPendingChrome(summary) {
+				const badge = document.getElementById('eeprom-pending-badge');
+				const discard = document.getElementById('eeprom-discard');
+				if (summary && summary.pending) {
+					badge.classList.remove('hidden');
+					discard.classList.remove('hidden');
+				} else {
+					badge.classList.add('hidden');
+					discard.classList.add('hidden');
+				}
+			}
+
+			function describeState(data) {
+				const parts = [];
+				if (data.source === 'eeprom.txt') {
+					parts.push("Loaded live config from U-Boot's eeprom.txt dump");
+				} else if (data.source) {
+					parts.push(`Loaded from ${data.source}`);
+				}
+				if (data.pending) {
+					parts.push('a pending update is staged for the next boot');
+				}
+				if (!data.pieepromBinPresent) {
+					parts.push('pieeprom.bin not yet cached on the FAT (will download on first save)');
+				}
+				return parts.length ? parts.join(' — ') + '.' : 'Loaded.';
+			}
+
+			window.loadEEPROMConfig = async function() {
+				setStatus('Loading…');
+				try {
+					const r = await fetch('/api/firmware/eeprom', { headers: getAuthHeaders() });
+					if (!r.ok) {
+						const err = await r.json().catch(() => ({}));
+						setStatus('Error: ' + (err.error || r.statusText), 'text-destructive');
+						return;
+					}
+					const data = await r.json();
+					editor().value = data.raw || '';
+					renderPreview(data);
+					applyPendingChrome(data);
+					if (!data.raw) {
+						setStatus('No eeprom.txt on the FAT yet — U-Boot writes it on each boot.');
+					} else {
+						setStatus(describeState(data));
+					}
+				} catch(e) {
+					setStatus('Error: ' + e.message, 'text-destructive');
+				}
+			};
+
+			window.discardPendingEEPROM = async function() {
+				if (!confirm('Discard the pending EEPROM update? The next boot will keep the current EEPROM unchanged.')) return;
+				const btn = document.getElementById('eeprom-discard');
+				btn.disabled = true;
+				setStatus('Discarding…');
+				try {
+					const r = await fetch('/api/firmware/eeprom/pending', {
+						method: 'DELETE',
+						headers: getAuthHeaders(),
+					});
+					if (!r.ok && r.status !== 204) {
+						const err = await r.json().catch(() => ({}));
+						setStatus('Error: ' + (err.error || r.statusText), 'text-destructive');
+						return;
+					}
+					setStatus('Pending update discarded.', 'text-green-500');
+					await loadEEPROMConfig();
+				} catch(e) {
+					setStatus('Error: ' + e.message, 'text-destructive');
+				} finally {
+					btn.disabled = false;
+				}
+			};
+
+			window.refreshPieepromBin = async function() {
+				if (!confirm('Re-download the latest pieeprom.bin from raspberrypi/rpi-eeprom? This replaces the cached image on the firmware FAT. Any pending update keeps using its existing source until you re-save.')) return;
+				const btn = document.getElementById('eeprom-refresh-bin');
+				btn.disabled = true;
+				setStatus('Fetching latest EEPROM image…');
+				try {
+					const r = await fetch('/api/firmware/eeprom/refresh', {
+						method: 'POST',
+						headers: getAuthHeaders(),
+					});
+					if (!r.ok) {
+						const err = await r.json().catch(() => ({}));
+						setStatus('Error: ' + (err.error || r.statusText), 'text-destructive');
+						return;
+					}
+					const data = await r.json();
+					applyPendingChrome(data);
+					setStatus('pieeprom.bin refreshed from upstream.', 'text-green-500');
+				} catch(e) {
+					setStatus('Error: ' + e.message, 'text-destructive');
+				} finally {
+					btn.disabled = false;
+				}
+			};
+
+			window.refreshEEPROMPreview = function() {
+				renderPreview(parseClient(editor().value));
+			};
+
+			window.saveEEPROMConfig = async function() {
+				const btn = saveBtn();
+				const content = editor().value;
+				btn.disabled = true;
+				setStatus('Staging update…');
+				try {
+					// First save can take a few seconds — the server lazily
+					// downloads pieeprom.bin from raspberrypi/rpi-eeprom if
+					// it's not already on the FAT.
+					const r = await fetch('/api/firmware/eeprom', {
+						method: 'PUT',
+						headers: getAuthHeaders(),
+						body: JSON.stringify({ content }),
+					});
+					if (!r.ok) {
+						const err = await r.json().catch(() => ({}));
+						setStatus('Error: ' + (err.error || r.statusText), 'text-destructive');
+						return;
+					}
+					const data = await r.json();
+					renderPreview(data);
+					applyPendingChrome(data);
+					setStatus('Staged as pieeprom.upd. rpi-eeprom-update will flash on the next boot.', 'text-green-500');
+				} catch(e) {
+					setStatus('Error: ' + e.message, 'text-destructive');
+				} finally {
+					btn.disabled = false;
+				}
+			};
+
+			// Live re-parse as user edits (debounced).
+			let parseTimer = null;
+			document.addEventListener('input', (e) => {
+				if (e.target && e.target.id === 'eeprom-editor') {
+					clearTimeout(parseTimer);
+					parseTimer = setTimeout(refreshEEPROMPreview, 250);
+				}
+			});
+		})();
+	</script>
+}

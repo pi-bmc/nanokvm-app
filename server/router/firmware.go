@@ -39,6 +39,88 @@ func firmwareRouter(r *gin.Engine) {
 		c.JSON(http.StatusAccepted, gin.H{"message": "download started"})
 	})
 
+	// GET /api/firmware/eeprom — returns the current bootloader config:
+	// raw text + section-grouped parse + provenance (which file it came
+	// from) + Pending flag when a staged pieeprom.upd is present.
+	api.GET("/eeprom", func(c *gin.Context) {
+		summary, err := ctrl.GetEEPROMConfig()
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, summary)
+	})
+
+	// PUT /api/firmware/eeprom — stages a new bootconf.txt as pieeprom.upd
+	// using the rpieeprom binary-image updater. Body is either
+	// application/json `{"content":"..."}` or raw text/plain. The host's
+	// rpi-eeprom-update flashes pieeprom.upd on the next boot.
+	api.PUT("/eeprom", func(c *gin.Context) {
+		var content string
+		ct := c.GetHeader("Content-Type")
+		if strings.HasPrefix(ct, "application/json") {
+			var body struct {
+				Content string `json:"content"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			content = body.Content
+		} else {
+			raw, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			content = string(raw)
+		}
+		// Use the request context so a slow upstream download is bounded
+		// by the client's wait. SetEEPROMConfig will lazily fetch
+		// pieeprom.bin if missing, which can take several seconds.
+		summary, err := ctrl.SetEEPROMConfig(c.Request.Context(), content)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, summary)
+	})
+
+	// DELETE /api/firmware/eeprom/pending — cancels a staged update by
+	// removing pieeprom.upd. Next read shows the live eeprom.txt config
+	// with Pending=false.
+	api.DELETE("/eeprom/pending", func(c *gin.Context) {
+		if err := ctrl.CancelEEPROMUpdate(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
+
+	// GET /api/firmware/eeprom/latest — peek at the latest upstream
+	// pieeprom-*.bin metadata (name/version/size/url) without committing
+	// to a download. Useful for showing "new version available" badges.
+	api.GET("/eeprom/latest", func(c *gin.Context) {
+		img, err := ctrl.LatestPieepromImage(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, img)
+	})
+
+	// POST /api/firmware/eeprom/refresh — force a re-download of the
+	// latest upstream pieeprom-*.bin, overwriting pieeprom.bin on the
+	// FAT. Does NOT touch any pending pieeprom.upd.
+	api.POST("/eeprom/refresh", func(c *gin.Context) {
+		if err := ctrl.RefreshPieepromBin(c.Request.Context()); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		summary, _ := ctrl.GetEEPROMConfig()
+		c.JSON(http.StatusOK, summary)
+	})
+
 	api.GET("/env", func(c *gin.Context) {
 		vars, err := ctrl.GetAllEnvVars()
 		if err != nil {
@@ -408,7 +490,12 @@ func firmwareRouter(r *gin.Engine) {
 	// POST /api/firmware/bios/kernel/:kernel/download — download and cache the
 	// U-Boot image for the given kernel version without activating it.
 	// Optional query: ?force=true deletes any existing cached image first,
-	// forcing a fresh download even if the file is already present.
+	// forcing a fresh download even if the file is already present. When
+	// force=true AND the kernel's U-Boot version is the currently-active one,
+	// the freshly-downloaded image is automatically swapped into the active
+	// slot (preserving env files) — "refresh" otherwise leaves the active
+	// boot image untouched, which is surprising when the user is refreshing
+	// the version they're already running.
 	api.POST("/bios/kernel/:kernel/download", func(c *gin.Context) {
 		kernel := c.Param("kernel")
 		ubootVer, ok := firmware.KernelUBootMap[kernel]
@@ -426,15 +513,30 @@ func firmwareRouter(r *gin.Engine) {
 			return
 		}
 		force := c.Query("force") == "true"
-		go func(ver, url string, force bool) {
+		// Snapshot active version BEFORE the download so the auto-reactivate
+		// decision isn't affected by a concurrent activation racing this one.
+		wasActive := force && ctrl.ActiveUBootVersion() == ubootVer
+		go func(ver, url string, force, reactivate bool) {
 			if force {
 				ctrl.DeleteVersionedImage(ver)
 			}
 			if err := ctrl.DownloadVersionedImage(ver, url); err != nil {
 				log.Errorf("versioned image download failed (%s): %v", ver, err)
+				return
 			}
-		}(ubootVer, rel.AssetURL, force)
-		c.JSON(http.StatusAccepted, gin.H{"message": "download started", "uboot": ubootVer})
+			if reactivate {
+				if err := ctrl.ActivateVersionedImage(ver); err != nil {
+					log.Errorf("auto-reactivate after refresh failed (%s): %v", ver, err)
+				} else {
+					log.Infof("auto-reactivated %s after refresh of currently-active image", ver)
+				}
+			}
+		}(ubootVer, rel.AssetURL, force, wasActive)
+		c.JSON(http.StatusAccepted, gin.H{
+			"message":      "download started",
+			"uboot":        ubootVer,
+			"reactivating": wasActive,
+		})
 	})
 
 	// POST /api/firmware/bios/kernel/:kernel/activate — swap the cached image
