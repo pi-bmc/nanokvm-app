@@ -76,6 +76,10 @@ func (s *Service) PatchSystem(c *gin.Context) {
 		Boot struct {
 			BootSourceOverrideTarget  string `json:"BootSourceOverrideTarget"`
 			BootSourceOverrideEnabled string `json:"BootSourceOverrideEnabled"` // "Once" | "Continuous" | "Disabled"
+			// Mode (Legacy|UEFI) is accepted but ignored — the RPi5 firmware
+			// path is UEFI-only, so there's no toggle to honour. We expose
+			// it in the response below so PATCH echoes are consistent.
+			BootSourceOverrideMode string `json:"BootSourceOverrideMode"`
 		} `json:"Boot"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -174,6 +178,10 @@ func buildSystemResource() gin.H {
 			},
 			"BootSourceOverrideEnabled@Redfish.AllowableValues": []string{
 				"Disabled", "Once", "Continuous",
+			},
+			"BootSourceOverrideMode": "UEFI",
+			"BootSourceOverrideMode@Redfish.AllowableValues": []string{
+				"UEFI",
 			},
 		},
 		"Actions": gin.H{

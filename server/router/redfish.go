@@ -43,6 +43,7 @@ func redfishRouter(r *gin.Engine) {
 		// Managers
 		api.GET("/Managers", service.GetManagerCollection)
 		api.GET("/Managers/1", service.GetManager)
+		api.GET("/Managers/1/Oem/Dell/DellAttributes/iDRAC.Embedded.1", service.GetDellIDRACAttributes)
 
 		// Serial Interfaces
 		api.GET("/Managers/1/SerialInterfaces", service.GetSerialInterfaceCollection)
