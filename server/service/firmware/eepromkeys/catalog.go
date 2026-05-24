@@ -412,10 +412,7 @@ func FilterDefaultsFromBootconf(p Platform, content string) string {
 
 		// Section header — track and pass through.
 		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
-			section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
-			if section == "" {
-				section = "all"
-			}
+			section = normaliseSectionName(trimmed[1 : len(trimmed)-1])
 			lines = append(lines, entry{raw: raw, isHdr: true})
 			continue
 		}
@@ -512,10 +509,7 @@ func ExtractNonAllSections(content string) string {
 		raw := scanner.text()
 		trimmed := strings.TrimSpace(raw)
 		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
-			section = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
-			if section == "" {
-				section = "all"
-			}
+			section = normaliseSectionName(trimmed[1 : len(trimmed)-1])
 			keep = section != "all"
 			if keep {
 				b.WriteString(raw)
@@ -548,10 +542,7 @@ func ParseAllSection(content string) map[string]string {
 			continue
 		}
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section = strings.TrimSpace(line[1 : len(line)-1])
-			if section == "" {
-				section = "all"
-			}
+			section = normaliseSectionName(line[1 : len(line)-1])
 			continue
 		}
 		if section != "all" {
@@ -568,6 +559,55 @@ func ParseAllSection(content string) map[string]string {
 		}
 	}
 	return out
+}
+
+// normaliseSectionName trims + lowercases a section header so [All],
+// [ALL], and [ all ] all compare equal to "all". The bootloader treats
+// section predicates case-insensitively in practice, and upstream tooling
+// (rpi-eeprom-config, hand-edited configs) uses a mix.
+func normaliseSectionName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return "all"
+	}
+	return s
+}
+
+// ListSections returns the (lowercased, deduped, source-order) list of
+// section names a bootconf.txt-shaped blob contains. If the file has any
+// key=value lines before the first explicit [section] header, "all" is
+// included implicitly. Used by diagnostics to spot "settings all live in
+// a conditional section" cases.
+func ListSections(content string) []string {
+	seen := map[string]bool{}
+	order := []string{}
+	add := func(name string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		order = append(order, name)
+	}
+
+	section := ""
+	scanner := newLineScanner(content)
+	for scanner.scan() {
+		line := strings.TrimSpace(scanner.text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section = normaliseSectionName(line[1 : len(line)-1])
+			add(section)
+			continue
+		}
+		// key=value before any header → implicit [all].
+		if section == "" {
+			section = "all"
+			add(section)
+		}
+	}
+	return order
 }
 
 // --- tiny line scanner (avoids bufio.Scanner's drop-trailing-newline quirk) ---

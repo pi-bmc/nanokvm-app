@@ -33,7 +33,7 @@ import (
 func (s *Service) GetBios(c *gin.Context) {
 	ctrl := firmware.GetController()
 
-	attrs, err := ctrl.GetBIOSAttributes()
+	attrs, diag, err := ctrl.GetBIOSAttributes()
 	if err != nil {
 		redfishErrorResponse(c, http.StatusServiceUnavailable, "read bios attributes: "+err.Error())
 		return
@@ -79,6 +79,19 @@ func (s *Service) GetBios(c *gin.Context) {
 				"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BIOS",
 			},
 		},
+		// Vendor-namespaced diagnostics — DMTF DSP0266 §6.4.13 Oem
+		// pattern. Tells an operator WHY Attributes might be empty:
+		// which FAT paths were probed, whether each one was found,
+		// which one was actually parsed, and what section headers it
+		// contained. Critical for first-boot debugging where U-Boot
+		// hasn't written eeprom.txt yet.
+		"Oem": gin.H{
+			"NanoKVM": gin.H{
+				"@odata.type":   "#NanoKVM.v1_0_0.Bios",
+				"Diagnostics":   diag,
+				"SourceMissing": diag.Source == "",
+			},
+		},
 	}
 	if biosVersion != "" {
 		res["BiosVersion"] = biosVersion
@@ -93,7 +106,7 @@ func (s *Service) GetBios(c *gin.Context) {
 func (s *Service) GetBiosSettings(c *gin.Context) {
 	ctrl := firmware.GetController()
 
-	attrs, pending, err := ctrl.GetPendingBIOSAttributes()
+	attrs, pending, diag, err := ctrl.GetPendingBIOSAttributes()
 	if err != nil {
 		redfishErrorResponse(c, http.StatusServiceUnavailable, "read pending bios: "+err.Error())
 		return
@@ -102,15 +115,46 @@ func (s *Service) GetBiosSettings(c *gin.Context) {
 		attrs = map[string]string{}
 	}
 
+	// Distinct human-readable description per state — makes the "empty
+	// because nothing is staged" case obvious without having to dig into
+	// the Oem diagnostics block. The DMTF Settings spec returns an empty
+	// Attributes object when no update is queued; this just adds wording.
+	desc := "Bootloader EEPROM changes staged for the next boot (pieeprom.upd). " +
+		"PATCH this resource with an Attributes object to stage a change; " +
+		"GET /redfish/v1/Systems/1/Bios for the live configuration."
+	if !pending {
+		desc = "No EEPROM update is staged. " +
+			"PATCH this resource with an Attributes object to stage a change; " +
+			"GET /redfish/v1/Systems/1/Bios for the live configuration."
+	}
+
 	res := gin.H{
 		"@odata.type":    "#Bios.v1_2_0.Bios",
 		"@odata.id":      "/redfish/v1/Systems/1/Bios/Settings",
 		"@odata.context": "/redfish/v1/$metadata#Bios.Bios",
 		"Id":             "Settings",
 		"Name":           "BIOS Pending Settings",
-		"Description":    "Bootloader EEPROM changes staged for the next boot (pieeprom.upd).",
+		"Description":    desc,
 		"Attributes":     attrs,
 		"Pending":        pending,
+		// Backlink to the live resource — strict Redfish doesn't define
+		// this navigation property on the SettingsObject, but it costs
+		// nothing and saves operators a doc lookup.
+		"Links": gin.H{
+			"LiveBios": gin.H{
+				"@odata.id": "/redfish/v1/Systems/1/Bios",
+			},
+		},
+		// Vendor-namespaced diagnostics — same pattern as /Bios. When
+		// Attributes is empty, this tells the caller WHY: is pieeprom.upd
+		// missing entirely, or present-but-malformed, or
+		// present-but-only-conditional-sections?
+		"Oem": gin.H{
+			"NanoKVM": gin.H{
+				"@odata.type": "#NanoKVM.v1_0_0.BiosSettings",
+				"Diagnostics": diag,
+			},
+		},
 	}
 	c.JSON(http.StatusOK, res)
 }
@@ -158,7 +202,7 @@ func (s *Service) PatchBiosSettings(c *gin.Context) {
 
 	// Re-read the pending state so the response reflects exactly what was
 	// persisted (after default-filtering).
-	pending, _, _ := ctrl.GetPendingBIOSAttributes()
+	pending, _, diag, _ := ctrl.GetPendingBIOSAttributes()
 	if pending == nil {
 		pending = map[string]string{}
 	}
@@ -170,6 +214,15 @@ func (s *Service) PatchBiosSettings(c *gin.Context) {
 		"Name":           "BIOS Pending Settings",
 		"Attributes":     pending,
 		"Pending":        true,
+		"Links": gin.H{
+			"LiveBios": gin.H{"@odata.id": "/redfish/v1/Systems/1/Bios"},
+		},
+		"Oem": gin.H{
+			"NanoKVM": gin.H{
+				"@odata.type": "#NanoKVM.v1_0_0.BiosSettings",
+				"Diagnostics": diag,
+			},
+		},
 		"@Message.ExtendedInfo": []gin.H{{
 			"MessageId": "Base.1.13.SettingsApplyTime",
 			"Message":   "Settings staged; applied on next system reset.",

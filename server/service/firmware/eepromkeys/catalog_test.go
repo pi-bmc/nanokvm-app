@@ -181,3 +181,42 @@ func TestParseAllSection_IgnoresConditionalSections(t *testing.T) {
 		t.Errorf("BOOT_ORDER = %q; want 0x123 (conditional section must not overwrite)", got["BOOT_ORDER"])
 	}
 }
+
+// TestParseAllSection_CaseInsensitiveSection covers the regression that
+// motivated normaliseSectionName: tooling that writes [All] or [ALL]
+// must still be recognized as the universal section. Same for the
+// implicit-no-header case (key=value before any [section]).
+func TestParseAllSection_CaseInsensitiveSection(t *testing.T) {
+	cases := map[string]string{
+		"[All]":            "[All]\nBOOT_UART=1\n",
+		"[ALL]":            "[ALL]\nBOOT_UART=1\n",
+		"[ all ]":          "[ all ]\nBOOT_UART=1\n",
+		"no header at all": "BOOT_UART=1\n",
+	}
+	for name, in := range cases {
+		got := ParseAllSection(in)
+		if got["BOOT_UART"] != "1" {
+			t.Errorf("%s: BOOT_UART = %q; want 1 (full parse: %#v)", name, got["BOOT_UART"], got)
+		}
+	}
+}
+
+func TestListSections_OrderAndImplicitAll(t *testing.T) {
+	in := "BOOT_UART=1\n[gpio4=1]\nFOO=BAR\n[HDMI=0]\nBAZ=1\n[all]\nQUX=1\n"
+	got := ListSections(in)
+	want := []string{"all", "gpio4=1", "hdmi=0"}
+	if len(got) != len(want) {
+		t.Fatalf("ListSections = %v; want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ListSections[%d] = %q; want %q (full = %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestListSections_Empty(t *testing.T) {
+	if got := ListSections(""); len(got) != 0 {
+		t.Errorf("empty input → %v; want []", got)
+	}
+}

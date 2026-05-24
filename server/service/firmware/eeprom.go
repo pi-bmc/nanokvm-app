@@ -158,36 +158,139 @@ func (c *Controller) SetEEPROMConfig(ctx context.Context, bootconfTxt string) (E
 	return out, nil
 }
 
-// GetBIOSAttributes returns the live [all]-section keys from eeprom.txt
-// as a flat map suitable for the Redfish Bios.Attributes resource.
+// eepromLiveTextCandidates is the list of FAT-root paths we probe in
+// order looking for the live bootloader text dump. U-Boot writes
+// "eeprom.txt"; some recovery / rpi-eeprom tooling uses "bootconf.txt"
+// in the same shape, so we accept both.
+var eepromLiveTextCandidates = []string{
+	"eeprom.txt",
+	"bootconf.txt",
+}
+
+// EEPROMReadDiagnostics describes everything the BMC tried when fetching
+// live bootloader settings. Surfaced via the Redfish Bios resource (Oem
+// extension) so an operator can see WHY Attributes might be empty.
+type EEPROMReadDiagnostics struct {
+	// Probes is the result of probing each candidate path, in order.
+	Probes []EEPROMProbe `json:"probes"`
+	// Source is the path we ultimately read from. Empty when nothing
+	// was found.
+	Source string `json:"source"`
+	// AttributeCount is how many key=value pairs the [all]-section
+	// parse produced from Source.
+	AttributeCount int `json:"attributeCount"`
+	// SectionsSeen lists every section header found in the source file
+	// (lowercase). Useful when [all] is empty but conditional sections
+	// hold all the actual settings.
+	SectionsSeen []string `json:"sectionsSeen,omitempty"`
+}
+
+// EEPROMProbe is one path-lookup attempt during EEPROM read.
+type EEPROMProbe struct {
+	Path  string `json:"path"`
+	Found bool   `json:"found"`
+	Size  int    `json:"size,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// GetBIOSAttributes returns the live [all]-section keys from the
+// bootloader text dump as a flat map suitable for the Redfish
+// Bios.Attributes resource, plus diagnostics describing what was probed.
 // Conditional sections ([gpio4=1] etc.) are not exposed via this surface.
-func (c *Controller) GetBIOSAttributes() (map[string]string, error) {
-	data, err := c.ReadFileFromImage(eepromTextFile)
-	if err != nil || len(data) == 0 {
-		// Empty map (not nil) so downstream callers can json-encode without
-		// special-casing absence.
-		return map[string]string{}, nil
+//
+// Unlike the previous version, errors from the underlying FS are NOT
+// swallowed — the caller decides whether to surface them. Missing
+// files (the most common reason for empty attrs) are reported as
+// Probes[].Found=false rather than as errors.
+func (c *Controller) GetBIOSAttributes() (map[string]string, EEPROMReadDiagnostics, error) {
+	diag := EEPROMReadDiagnostics{Probes: make([]EEPROMProbe, 0, len(eepromLiveTextCandidates))}
+
+	for _, name := range eepromLiveTextCandidates {
+		data, err := c.ReadFileFromImage(name)
+		probe := EEPROMProbe{Path: name}
+		if err != nil {
+			probe.Error = err.Error()
+			diag.Probes = append(diag.Probes, probe)
+			// Don't bail on a single-path read error — keep probing other
+			// candidates. The aggregated diagnostics make it obvious if
+			// every probe failed for the same reason.
+			continue
+		}
+		if len(data) == 0 {
+			diag.Probes = append(diag.Probes, probe) // Found=false implicit
+			continue
+		}
+		probe.Found = true
+		probe.Size = len(data)
+		diag.Probes = append(diag.Probes, probe)
+
+		// First non-empty file wins. Capture the section list for
+		// diagnostics so the operator can spot "all settings live in a
+		// conditional section" cases.
+		text := string(data)
+		diag.Source = name
+		diag.SectionsSeen = eepromkeys.ListSections(text)
+		attrs := eepromkeys.ParseAllSection(text)
+		diag.AttributeCount = len(attrs)
+		return attrs, diag, nil
 	}
-	return eepromkeys.ParseAllSection(string(data)), nil
+
+	// Nothing found — return empty map (not nil) so json-encoding stays
+	// `"Attributes": {}` rather than `"Attributes": null`.
+	return map[string]string{}, diag, nil
+}
+
+// EEPROMPendingDiagnostics describes the staged-update slot's state so
+// /redfish/v1/Systems/1/Bios/Settings can answer "why is this empty?".
+// Surfaced via the Redfish Oem extension on that resource.
+type EEPROMPendingDiagnostics struct {
+	// Path is the FAT-root filename we look at for staged updates.
+	Path string `json:"path"`
+	// Present is true when pieeprom.upd exists and is non-empty.
+	Present bool `json:"present"`
+	// Size is the staged image's size in bytes. Zero when not present.
+	Size int `json:"size,omitempty"`
+	// ParseError describes a failure to walk the staged image (e.g. truncated
+	// download). Empty on success or when no .upd exists.
+	ParseError string `json:"parseError,omitempty"`
+	// AttributeCount is how many [all]-section keys the staged bootconf.txt
+	// contains. Zero when no update is staged OR when the staged config has
+	// only conditional sections.
+	AttributeCount int `json:"attributeCount"`
 }
 
 // GetPendingBIOSAttributes returns the [all]-section keys staged in
-// pieeprom.upd if a pending update is present, else nil. Used by the
-// Redfish Bios.Settings (SettingsObject) resource.
-func (c *Controller) GetPendingBIOSAttributes() (map[string]string, bool, error) {
+// pieeprom.upd if a pending update is present, else nil. The diagnostics
+// struct describes the .upd slot's state so callers (Redfish Settings
+// resource) can distinguish "no update staged" from "FS error" from
+// "staged file is malformed".
+func (c *Controller) GetPendingBIOSAttributes() (map[string]string, bool, EEPROMPendingDiagnostics, error) {
+	diag := EEPROMPendingDiagnostics{Path: eepromPendingFile}
+
 	data, err := c.ReadFileFromImage(eepromPendingFile)
-	if err != nil || len(data) == 0 {
-		return nil, false, nil
+	if err != nil {
+		return nil, false, diag, err
 	}
+	if len(data) == 0 {
+		// File not present (the common case — nothing has been staged).
+		return nil, false, diag, nil
+	}
+	diag.Present = true
+	diag.Size = len(data)
+
 	img, err := rpieeprom.ParseBytes(data)
 	if err != nil {
-		return nil, false, fmt.Errorf("parse pending image: %w", err)
+		diag.ParseError = err.Error()
+		return nil, false, diag, fmt.Errorf("parse pending image: %w", err)
 	}
 	bc, err := img.GetFile(rpieeprom.BootConfTxt)
 	if err != nil {
-		return nil, false, fmt.Errorf("extract pending bootconf.txt: %w", err)
+		diag.ParseError = "extract bootconf.txt: " + err.Error()
+		return nil, false, diag, fmt.Errorf("extract pending bootconf.txt: %w", err)
 	}
-	return eepromkeys.ParseAllSection(string(bc)), true, nil
+	attrs := eepromkeys.ParseAllSection(string(bc))
+	diag.AttributeCount = len(attrs)
+	return attrs, true, diag, nil
 }
 
 // SetBIOSAttributes stages a Redfish PATCH against the BIOS settings

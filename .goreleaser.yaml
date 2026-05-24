@@ -10,6 +10,14 @@ builds:
     env: ["CGO_ENABLED=0"]
     main: ./cmd/server
     binary: server/NanoKVM-Server
+    flags:
+      - -trimpath # reproducible builds; strips build-tree paths from the binary
+    ldflags:
+      - -s # strip symbol table (~20% size reduction)
+      - -w # strip DWARF debug info (~25% size reduction)
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
     goos:
       - linux
     goarch:
@@ -18,6 +26,11 @@ builds:
     env: ["CGO_ENABLED=0"]
     main: ./cmd/rpiboot
     binary: system/usr/bin/rpiboot
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
     goos:
       - linux
     goarch:
