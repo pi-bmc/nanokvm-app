@@ -35,6 +35,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	diskfs "github.com/diskfs/go-diskfs"
 	"github.com/diskfs/go-diskfs/disk"
@@ -44,20 +45,36 @@ import (
 )
 
 // readerCache holds a parsed view of the firmware image. Lifetime is
-// bounded by writes and downloads; see invalidateReaderCacheLocked.
+// bounded by writes, downloads, and external mutations to c.imagePath
+// (detected via mtime+size); see invalidateReaderCacheLocked and
+// readerLocked.
 type readerCache struct {
-	disk *disk.Disk
-	fs   filesystem.FileSystem
+	disk  *disk.Disk
+	fs    filesystem.FileSystem
+	mtime time.Time
+	size  int64
 }
 
 // readerLocked returns a cached reader, opening the image if needed.
-// Must hold c.mu.
+// If the underlying image file has changed on disk since the cache was
+// opened (e.g. U-Boot wrote envs via the USB mass-storage gadget), the
+// cache is dropped and a fresh reader is opened. Must hold c.mu.
 func (c *Controller) readerLocked() (*readerCache, error) {
-	if c.reader != nil {
-		return c.reader, nil
-	}
 	if !c.imageExists() {
 		return nil, fmt.Errorf("firmware image not found: %s", c.imagePath)
+	}
+
+	info, err := os.Stat(c.imagePath)
+	if err != nil {
+		return nil, fmt.Errorf("stat image: %w", err)
+	}
+
+	if c.reader != nil {
+		if c.reader.mtime.Equal(info.ModTime()) && c.reader.size == info.Size() {
+			return c.reader, nil
+		}
+		// Image changed under us — drop the stale FAT view.
+		c.invalidateReaderCacheLocked()
 	}
 
 	d, err := diskfs.Open(c.imagePath, diskfs.WithOpenMode(diskfs.ReadOnly))
@@ -70,7 +87,7 @@ func (c *Controller) readerLocked() (*readerCache, error) {
 		return nil, fmt.Errorf("get filesystem: %w", err)
 	}
 
-	c.reader = &readerCache{disk: d, fs: fs}
+	c.reader = &readerCache{disk: d, fs: fs, mtime: info.ModTime(), size: info.Size()}
 	return c.reader, nil
 }
 
