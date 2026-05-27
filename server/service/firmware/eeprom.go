@@ -26,6 +26,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -47,9 +49,10 @@ const PlatformDefault = eepromkeys.PlatformRPi5
 
 const (
 	// File names on the firmware-image FAT root.
-	eepromBinaryFile   = "pieeprom.bin" // raw EEPROM dump written by U-Boot
-	eepromPendingFile  = "pieeprom.upd" // staged update for rpi-eeprom-update
-	eepromRecoveryFile = "recovery.bin" // recovery loader sourced from upstream
+	eepromBinaryFile     = "pieeprom.bin" // raw EEPROM dump written by U-Boot
+	eepromPendingFile    = "pieeprom.upd" // staged update for rpi-eeprom-update
+	eepromPendingSigFile = "pieeprom.sig" // sha256(pieeprom.upd) — Pi 5 requires this
+	eepromRecoveryFile   = "recovery.bin" // recovery loader sourced from upstream
 )
 
 // maxEEPROMConfigBytes caps accepted writes. bootconf.txt sits in the
@@ -197,8 +200,8 @@ func (c *Controller) SetEEPROMConfig(ctx context.Context, bootconfTxt string) (E
 		return EEPROMConfigSummary{}, fmt.Errorf("replace bootconf.txt: %w", err)
 	}
 
-	if err := c.WriteFileToImage(eepromPendingFile, img.Bytes()); err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("write %s: %w", eepromPendingFile, err)
+	if err := c.stagePendingEEPROM(img.Bytes()); err != nil {
+		return EEPROMConfigSummary{}, err
 	}
 
 	// rpi-eeprom-update needs recovery.bin on the same FAT to actually
@@ -215,6 +218,24 @@ func (c *Controller) SetEEPROMConfig(ctx context.Context, bootconfTxt string) (E
 	out, _ := c.GetEEPROMConfig()
 	out.Pending = true
 	return out, nil
+}
+
+// stagePendingEEPROM writes pieeprom.upd alongside its pieeprom.sig
+// signature. The Pi 5 boot ROM verifies sig against upd before applying;
+// without the .sig the update is silently ignored ("pieeprom.upd not
+// found" in the early-stage log even though the .upd is on the FAT).
+// The signature format matches rpi-eeprom-update upstream: a single line
+// of lowercase hex SHA-256 over the .upd bytes.
+func (c *Controller) stagePendingEEPROM(updBytes []byte) error {
+	if err := c.WriteFileToImage(eepromPendingFile, updBytes); err != nil {
+		return fmt.Errorf("write %s: %w", eepromPendingFile, err)
+	}
+	sum := sha256.Sum256(updBytes)
+	sig := []byte(hex.EncodeToString(sum[:]) + "\n")
+	if err := c.WriteFileToImage(eepromPendingSigFile, sig); err != nil {
+		return fmt.Errorf("write %s: %w", eepromPendingSigFile, err)
+	}
+	return nil
 }
 
 // eepromImageCandidates lists the FAT-root EEPROM images we look at in
@@ -399,8 +420,8 @@ func (c *Controller) SetBIOSAttributes(ctx context.Context, attrs map[string]str
 	if err := img.UpdateFile(rpieeprom.BootConfTxt, []byte(newBootconf)); err != nil {
 		return EEPROMConfigSummary{}, fmt.Errorf("replace bootconf.txt: %w", err)
 	}
-	if err := c.WriteFileToImage(eepromPendingFile, img.Bytes()); err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("write %s: %w", eepromPendingFile, err)
+	if err := c.stagePendingEEPROM(img.Bytes()); err != nil {
+		return EEPROMConfigSummary{}, err
 	}
 	if err := c.EnsureRecoveryBin(ctx); err != nil {
 		log.Warnf("eeprom: ensure recovery.bin failed: %v (staged update may not flash)", err)
@@ -415,6 +436,11 @@ func (c *Controller) SetBIOSAttributes(ctx context.Context, attrs map[string]str
 func (c *Controller) CancelEEPROMUpdate() error {
 	if err := c.RemoveFileFromImage(eepromPendingFile); err != nil {
 		return fmt.Errorf("remove %s: %w", eepromPendingFile, err)
+	}
+	// Drop the matching signature too — a stale .sig left behind from a
+	// previous stage would mismatch any future .upd written without one.
+	if err := c.RemoveFileFromImage(eepromPendingSigFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove %s: %w", eepromPendingSigFile, err)
 	}
 	return nil
 }
@@ -548,9 +574,10 @@ func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfi
 		return EEPROMConfigSummary{}, fmt.Errorf("transplant bootconf into %s: %w", latest.Name, err)
 	}
 
-	// 4. Stage as pieeprom.upd + recovery.bin from the same channel.
-	if err := c.WriteFileToImage(eepromPendingFile, newImg.Bytes()); err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("write %s: %w", eepromPendingFile, err)
+	// 4. Stage as pieeprom.upd (+ pieeprom.sig) + recovery.bin from the
+	//    same channel.
+	if err := c.stagePendingEEPROM(newImg.Bytes()); err != nil {
+		return EEPROMConfigSummary{}, err
 	}
 	log.Infof("eeprom: staged %s as %s with preserved bootconf from %s",
 		latest.Name, eepromPendingFile, sourceName)
