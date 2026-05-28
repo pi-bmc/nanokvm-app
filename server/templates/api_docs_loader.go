@@ -7,14 +7,40 @@ package templates
 // keeps the dep surface minimal.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v3"
 )
+
+// markdownRenderer is the shared goldmark instance used to convert
+// description strings (from the OpenAPI spec) into HTML. GFM is
+// enabled so the spec can use tables and auto-linked URLs the same as
+// it does in GitHub-rendered READMEs.
+var markdownRenderer = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+)
+
+// RenderMarkdown converts s to HTML using the shared goldmark renderer.
+// Returns the empty string when s is empty. Errors fall back to the
+// HTML-escaped original so a malformed description never crashes the
+// page.
+func RenderMarkdown(s string) string {
+	if s == "" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := markdownRenderer.Convert([]byte(s), &buf); err != nil {
+		return strings.ReplaceAll(strings.ReplaceAll(s, "<", "&lt;"), ">", "&gt;")
+	}
+	return buf.String()
+}
 
 // APIDocsModel is the page-ready view of the OpenAPI spec.
 type APIDocsModel struct {

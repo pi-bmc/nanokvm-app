@@ -99,6 +99,48 @@ templ templuiFallback() {
 		.hover\:bg-primary\/90:hover { background-color: color-mix(in oklab, var(--primary) 90%, transparent); }
 		.hover\:bg-accent:hover { background-color: var(--accent); }
 		.hover\:bg-destructive\/90:hover { background-color: color-mix(in oklab, var(--destructive) 90%, transparent); }
+
+		/* api-md scopes the goldmark-rendered description HTML on the API
+		   docs page. Tailwind's typography plugin isn't in the build, so
+		   the per-element rules are inlined here. */
+		.api-md            { line-height: 1.55; }
+		.api-md h1, .api-md h2, .api-md h3, .api-md h4 {
+		                     font-weight: 600;
+		                     color: var(--foreground);
+		                     margin: 1em 0 .4em; }
+		.api-md h1         { font-size: 1.125rem; }
+		.api-md h2         { font-size: 1rem; }
+		.api-md h3, .api-md h4 { font-size: .9375rem; }
+		.api-md p          { margin: .6em 0; }
+		.api-md p:first-child { margin-top: 0; }
+		.api-md p:last-child  { margin-bottom: 0; }
+		.api-md ul, .api-md ol { margin: .5em 0; padding-left: 1.25rem; }
+		.api-md ul         { list-style: disc; }
+		.api-md ol         { list-style: decimal; }
+		.api-md li         { margin: .15em 0; }
+		.api-md strong     { color: var(--foreground); font-weight: 600; }
+		.api-md em         { font-style: italic; }
+		.api-md a          { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+		.api-md a:hover    { text-decoration-thickness: 2px; }
+		.api-md code       { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		                     font-size: .875em;
+		                     background: color-mix(in oklab, var(--muted) 60%, transparent);
+		                     padding: 0 .3em;
+		                     border-radius: .25rem; }
+		.api-md pre        { background: var(--muted);
+		                     border: 1px solid var(--border);
+		                     border-radius: .375rem;
+		                     padding: .75rem;
+		                     overflow-x: auto;
+		                     margin: .6em 0; }
+		.api-md pre code   { background: transparent; padding: 0; }
+		.api-md blockquote { border-left: 3px solid var(--border);
+		                     padding-left: .75rem;
+		                     color: var(--muted-foreground); }
+		.api-md hr         { border: 0; border-top: 1px solid var(--border); margin: 1em 0; }
+		.api-md table      { width: 100%; border-collapse: collapse; font-size: .8125rem; margin: .6em 0; }
+		.api-md th, .api-md td { border: 1px solid var(--border); padding: .35rem .5rem; text-align: left; }
+		.api-md th         { background: color-mix(in oklab, var(--muted) 40%, transparent); font-weight: 600; }
 	</style>
 }
 

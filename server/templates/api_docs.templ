@@ -104,9 +104,19 @@ templ apiDocsHeader(m APIDocsModel) {
 			<p class="mt-2 text-sm text-muted-foreground">{ m.Summary }</p>
 		}
 		if m.Description != "" {
-			<div class="prose prose-sm max-w-none mt-4 text-sm text-muted-foreground whitespace-pre-line">{ m.Description }</div>
+			@apiDocsMarkdown(m.Description, "mt-4")
 		}
 	</section>
+}
+
+// apiDocsMarkdown renders a description string as HTML inside a scoped
+// `.api-md` container. The .api-md styles live in input.css/output.css
+// and apply Redoc-like typography (headings, lists, inline code, bold)
+// to whatever goldmark emits.
+templ apiDocsMarkdown(s string, extraClass string) {
+	<div class={ "api-md text-sm text-muted-foreground", extraClass }>
+		@templ.Raw(RenderMarkdown(s))
+	</div>
 }
 
 // apiDocsTagSection is one tag (e.g. "Bios") with a section heading +
@@ -116,7 +126,7 @@ templ apiDocsTagSection(tag APIDocsTag, ops []APIDocsOperation) {
 		<div class="border-b border-border pb-3">
 			<h2 class="text-2xl font-bold">{ tag.Name }</h2>
 			if tag.Description != "" {
-				<p class="mt-2 text-sm text-muted-foreground">{ tag.Description }</p>
+				@apiDocsMarkdown(tag.Description, "mt-2")
 			}
 		</div>
 		for _, op := range ops {
@@ -147,7 +157,7 @@ templ apiDocsOperation(op APIDocsOperation) {
 					}
 				</div>
 				if op.Description != "" {
-					<p class="text-sm text-muted-foreground whitespace-pre-line">{ op.Description }</p>
+					@apiDocsMarkdown(op.Description, "")
 				}
 			</div>
 			if hasParamsIn(op.Parameters, "path") {
@@ -356,7 +366,7 @@ templ apiDocsSchema(s *APIDocsSchema, depth int) {
 templ apiDocsSchemaObject(s *APIDocsSchema, depth int) {
 	<div class="space-y-1.5">
 		if s.Description != "" && depth == 0 {
-			<p class="text-xs text-muted-foreground whitespace-pre-line mb-2">{ s.Description }</p>
+			@apiDocsMarkdown(s.Description, "text-xs mb-2")
 		}
 		for _, p := range s.Properties {
 			@apiDocsSchemaProp(p, depth)
@@ -398,7 +408,9 @@ templ apiDocsSchemaProp(p APIDocsSchemaProp, depth int) {
 					}
 				</div>
 				if p.Schema != nil && p.Schema.Description != "" {
-					<p class="text-xs text-muted-foreground whitespace-pre-line pl-5 mt-0.5">{ p.Schema.Description }</p>
+					<div class="pl-5 mt-0.5">
+						@apiDocsMarkdown(p.Schema.Description, "text-xs")
+					</div>
 				}
 			</summary>
 			<div class="pl-5 pt-1 pb-1">
@@ -426,7 +438,7 @@ templ apiDocsSchemaProp(p APIDocsSchemaProp, depth int) {
 templ apiDocsSchemaArray(s *APIDocsSchema, depth int) {
 	<div class="space-y-1">
 		if s.Description != "" && depth == 0 {
-			<p class="text-xs text-muted-foreground whitespace-pre-line">{ s.Description }</p>
+			@apiDocsMarkdown(s.Description, "text-xs")
 		}
 		<div class="flex items-baseline gap-2 flex-wrap">
 			<span class="text-[0.6875rem] uppercase tracking-wider text-muted-foreground">items</span>
