@@ -25,7 +25,6 @@ templ SettingsDialogTrigger() {
 			},
 		}) {
 			@icon.Settings()
-			<span class="hidden sm:inline">Settings</span>
 		}
 	}
 }
@@ -47,7 +46,7 @@ templ SettingsDialog() {
 			// Scrollable card area: flex-1 + overflow-y-auto pins the header
 			// and footer so the Close button is always reachable regardless of
 			// viewport height.
-			<div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 py-2 pr-1">
+			<div class="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-4 py-2">
 				@settingsNetworkCard()
 				@settingsSecurityCard()
 				@settingsAutoUpdateCard()

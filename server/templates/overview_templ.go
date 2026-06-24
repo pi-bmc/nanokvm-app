@@ -63,7 +63,7 @@ func OverviewSidebar() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"ov-sidebar\" data-state=\"closed\" aria-label=\"Server Overview\"><div class=\"ov-sidebar-inner\"><div class=\"flex items-center justify-between border-b border-border px-4 py-3\"><div><h2 class=\"text-sm font-semibold\">Server Overview</h2><p class=\"text-xs text-muted-foreground\">Identity, network, and firmware state.</p></div><button onclick=\"toggleOverview()\" title=\"Close\" aria-label=\"Close Server Overview\" class=\"rounded-sm p-1 opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring transition-opacity\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></div><div class=\"flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"ov-sidebar\" data-state=\"closed\" aria-label=\"Server Overview\"><div class=\"ov-sidebar-inner\"><div class=\"flex items-center justify-between border-b border-border px-4 py-3\"><div><h2 class=\"text-sm font-semibold\">Server Overview</h2><p class=\"text-xs text-muted-foreground\">Identity, network, and firmware state.</p></div><button onclick=\"toggleOverview()\" title=\"Close\" aria-label=\"Close Server Overview\" class=\"rounded-sm p-1 opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring transition-opacity\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></div><div class=\"flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 py-3 space-y-4\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -567,7 +567,7 @@ func overviewBmcCard() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "Interfaces: IPMI :623 · <a href=\"/redfish/v1\" class=\"ml-1 underline underline-offset-4 hover:text-foreground\">Redfish</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "Interfaces: IPMI :623 · <a href=\"/redfish/v1\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"ml-1 underline underline-offset-4 hover:text-foreground\">Redfish</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

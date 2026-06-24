@@ -40,7 +40,7 @@ templ OverviewSidebar() {
 					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
 				</button>
 			</div>
-			<div class="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+			<div class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 py-3 space-y-4">
 				@overviewServerCard()
 				@overviewBmcCard()
 				@overviewBiosCard()
@@ -151,7 +151,7 @@ templ overviewBmcCard() {
 			@kvRow("MAC", "info-mac")
 		}
 		@card.Footer(card.FooterProps{Class: "pt-2 text-xs text-muted-foreground"}) {
-			Interfaces: IPMI :623 · <a href="/redfish/v1" class="ml-1 underline underline-offset-4 hover:text-foreground">Redfish</a>
+			Interfaces: IPMI :623 · <a href="/redfish/v1" target="_blank" rel="noopener noreferrer" class="ml-1 underline underline-offset-4 hover:text-foreground">Redfish</a>
 		}
 	}
 }

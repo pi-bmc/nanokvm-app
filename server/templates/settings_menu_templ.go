@@ -71,10 +71,6 @@ func SettingsDialogTrigger() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <span class=\"hidden sm:inline\">Settings</span>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
 				return nil
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
@@ -170,7 +166,7 @@ func SettingsDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "Settings")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "Settings")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -180,7 +176,7 @@ func SettingsDialog() templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -196,7 +192,7 @@ func SettingsDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "Network, security, system, and automatic update settings.")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "Network, security, system, and automatic update settings.")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -212,7 +208,7 @@ func SettingsDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "    <div class=\"flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 py-2 pr-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "    <div class=\"flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-4 py-2\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -232,7 +228,7 @@ func SettingsDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -272,7 +268,7 @@ func SettingsDialog() templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "Close")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "Close")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -372,7 +368,7 @@ func settingsNetworkCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "Network")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "Network")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -388,7 +384,7 @@ func settingsNetworkCard() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -404,7 +400,7 @@ func settingsNetworkCard() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"flex items-center justify-between py-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"flex items-center justify-between py-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -420,7 +416,7 @@ func settingsNetworkCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "SSH")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "SSH")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -434,7 +430,7 @@ func settingsNetworkCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -512,7 +508,7 @@ func settingsSecurityCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "Security")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "Security")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -528,7 +524,7 @@ func settingsSecurityCard() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -544,7 +540,7 @@ func settingsSecurityCard() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"flex items-center justify-between py-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"flex items-center justify-between py-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -560,7 +556,7 @@ func settingsSecurityCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "TLS / HTTPS")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "TLS / HTTPS")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -574,7 +570,7 @@ func settingsSecurityCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -582,7 +578,7 @@ func settingsSecurityCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -602,7 +598,7 @@ func settingsSecurityCard() templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " <span>Change Password</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, " <span>Change Password</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -692,7 +688,7 @@ func settingsAutoUpdateCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "Automatic Updates")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "Automatic Updates")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -702,7 +698,7 @@ func settingsAutoUpdateCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -718,7 +714,7 @@ func settingsAutoUpdateCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "Background ticker checks GitHub for newer releases and applies them.")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "Background ticker checks GitHub for newer releases and applies them.")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -734,7 +730,7 @@ func settingsAutoUpdateCard() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -750,7 +746,7 @@ func settingsAutoUpdateCard() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"flex items-center justify-between py-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<div class=\"flex items-center justify-between py-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -766,7 +762,7 @@ func settingsAutoUpdateCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "Enable auto-update")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "Enable auto-update")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -780,7 +776,7 @@ func settingsAutoUpdateCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div><div class=\"space-y-1.5\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</div><div class=\"space-y-1.5\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -796,7 +792,7 @@ func settingsAutoUpdateCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "Check interval (minutes)")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "Check interval (minutes)")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -815,7 +811,7 @@ func settingsAutoUpdateCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -823,7 +819,7 @@ func settingsAutoUpdateCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, " <div class=\"flex items-center justify-between py-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " <div class=\"flex items-center justify-between py-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -839,7 +835,7 @@ func settingsAutoUpdateCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "Update application")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "Update application")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -853,7 +849,7 @@ func settingsAutoUpdateCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div class=\"flex items-center justify-between py-1\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div><div class=\"flex items-center justify-between py-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -869,7 +865,7 @@ func settingsAutoUpdateCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "Update BIOS (U-Boot)")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "Update BIOS (U-Boot)")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -883,7 +879,7 @@ func settingsAutoUpdateCard() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div><p id=\"au-status\" class=\"text-xs text-muted-foreground min-h-[1rem]\"></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div><p id=\"au-status\" class=\"text-xs text-muted-foreground min-h-[1rem]\"></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -961,7 +957,7 @@ func settingsSystemCard() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "System")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "System")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -977,7 +973,7 @@ func settingsSystemCard() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1009,7 +1005,7 @@ func settingsSystemCard() templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, " <span>Reboot BMC</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, " <span>Reboot BMC</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -1060,7 +1056,7 @@ func settingsDialogScript() templ.Component {
 			templ_7745c5c3_Var42 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<script>\n\t\tasync function toggleSSH(enable) {\n\t\t\ttry { await apiPost(enable ? '/api/vm/ssh/enable' : '/api/vm/ssh/disable'); }\n\t\t\tcatch(e) { console.error(e); }\n\t\t}\n\t\tasync function toggleTLS(enable) {\n\t\t\ttry { await apiPost('/api/vm/tls', { enabled: enable }); }\n\t\t\tcatch(e) { console.error(e); }\n\t\t\talert('TLS ' + (enable ? 'enabled' : 'disabled') + '. Page may reload.');\n\t\t}\n\t\tasync function rebootSystem() {\n\t\t\ttry { await apiPost('/api/vm/system/reboot'); }\n\t\t\tcatch(e) { console.error(e); }\n\t\t}\n\n\t\tasync function loadAutoUpdate() {\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/autoupdate/settings', { headers: getAuthHeaders() });\n\t\t\t\tif (!r.ok) return;\n\t\t\t\tconst s = await r.json();\n\t\t\t\tdocument.getElementById('au-enabled').checked = !!s.enabled;\n\t\t\t\tdocument.getElementById('au-interval').value = s.intervalMinutes ?? 360;\n\t\t\t\tdocument.getElementById('au-application').checked = !!s.application;\n\t\t\t\tdocument.getElementById('au-bios').checked = !!s.bios;\n\t\t\t} catch(e) {}\n\t\t}\n\n\t\tasync function saveAutoUpdate() {\n\t\t\tconst status = document.getElementById('au-status');\n\t\t\tconst body = {\n\t\t\t\tenabled: document.getElementById('au-enabled').checked,\n\t\t\t\tintervalMinutes: parseInt(document.getElementById('au-interval').value, 10) || 360,\n\t\t\t\tapplication: document.getElementById('au-application').checked,\n\t\t\t\tbios: document.getElementById('au-bios').checked,\n\t\t\t};\n\t\t\tstatus.textContent = 'Saving…';\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/autoupdate/settings', {\n\t\t\t\t\tmethod: 'PATCH', headers: getAuthHeaders(),\n\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t});\n\t\t\t\tstatus.textContent = r.ok ? 'Saved' : 'Save failed';\n\t\t\t} catch(e) { status.textContent = 'Error: ' + e.message; }\n\t\t\tsetTimeout(() => { status.textContent = ''; }, 3000);\n\t\t}\n\n\t\t// Load initial state on page load + every time the dialog opens.\n\t\t(async function() {\n\t\t\ttry {\n\t\t\t\tconst s = await apiGet('/api/vm/ssh');\n\t\t\t\tconst el = document.getElementById('ssh-switch');\n\t\t\t\tif (el) el.checked = !!(s.data?.enabled);\n\t\t\t} catch(e) {}\n\t\t\tconst tls = document.getElementById('tls-switch');\n\t\t\tif (tls) tls.checked = window.location.protocol === 'https:';\n\t\t\tloadAutoUpdate();\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<script>\n\t\tasync function toggleSSH(enable) {\n\t\t\ttry { await apiPost(enable ? '/api/vm/ssh/enable' : '/api/vm/ssh/disable'); }\n\t\t\tcatch(e) { console.error(e); }\n\t\t}\n\t\tasync function toggleTLS(enable) {\n\t\t\ttry { await apiPost('/api/vm/tls', { enabled: enable }); }\n\t\t\tcatch(e) { console.error(e); }\n\t\t\talert('TLS ' + (enable ? 'enabled' : 'disabled') + '. Page may reload.');\n\t\t}\n\t\tasync function rebootSystem() {\n\t\t\ttry { await apiPost('/api/vm/system/reboot'); }\n\t\t\tcatch(e) { console.error(e); }\n\t\t}\n\n\t\tasync function loadAutoUpdate() {\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/autoupdate/settings', { headers: getAuthHeaders() });\n\t\t\t\tif (!r.ok) return;\n\t\t\t\tconst s = await r.json();\n\t\t\t\tdocument.getElementById('au-enabled').checked = !!s.enabled;\n\t\t\t\tdocument.getElementById('au-interval').value = s.intervalMinutes ?? 360;\n\t\t\t\tdocument.getElementById('au-application').checked = !!s.application;\n\t\t\t\tdocument.getElementById('au-bios').checked = !!s.bios;\n\t\t\t} catch(e) {}\n\t\t}\n\n\t\tasync function saveAutoUpdate() {\n\t\t\tconst status = document.getElementById('au-status');\n\t\t\tconst body = {\n\t\t\t\tenabled: document.getElementById('au-enabled').checked,\n\t\t\t\tintervalMinutes: parseInt(document.getElementById('au-interval').value, 10) || 360,\n\t\t\t\tapplication: document.getElementById('au-application').checked,\n\t\t\t\tbios: document.getElementById('au-bios').checked,\n\t\t\t};\n\t\t\tstatus.textContent = 'Saving…';\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/autoupdate/settings', {\n\t\t\t\t\tmethod: 'PATCH', headers: getAuthHeaders(),\n\t\t\t\t\tbody: JSON.stringify(body),\n\t\t\t\t});\n\t\t\t\tstatus.textContent = r.ok ? 'Saved' : 'Save failed';\n\t\t\t} catch(e) { status.textContent = 'Error: ' + e.message; }\n\t\t\tsetTimeout(() => { status.textContent = ''; }, 3000);\n\t\t}\n\n\t\t// Load initial state on page load + every time the dialog opens.\n\t\t(async function() {\n\t\t\ttry {\n\t\t\t\tconst s = await apiGet('/api/vm/ssh');\n\t\t\t\tconst el = document.getElementById('ssh-switch');\n\t\t\t\tif (el) el.checked = !!(s.data?.enabled);\n\t\t\t} catch(e) {}\n\t\t\tconst tls = document.getElementById('tls-switch');\n\t\t\tif (tls) tls.checked = window.location.protocol === 'https:';\n\t\t\tloadAutoUpdate();\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

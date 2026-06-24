@@ -14,17 +14,11 @@ import (
 templ PowerMenu() {
 	@dropdown.Dropdown() {
 		@dropdown.Trigger() {
-			@button.Button(button.Props{
-				Variant:    button.VariantGhost,
-				Size:       button.SizeSm,
-				Attributes: templ.Attributes{"aria-label": "Power menu"},
-			}) {
-				// Dot starts muted (unknown); JS sets bg-green-500 (on) or
-				// bg-destructive (off) once the GPIO poll resolves.
-				<span id="power-dot" class="inline-block size-2 rounded-full bg-muted-foreground"></span>
-				<span id="power-text" class="hidden xs:inline">Checking…</span>
-				@icon.ChevronDown()
-			}
+			<button class="nav-item" aria-label="Power menu">
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
+				Power
+				<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-60"><path d="m6 9 6 6 6-6"/></svg>
+			</button>
 		}
 		@dropdown.Content(dropdown.ContentProps{Class: "w-72", Placement: dropdown.PlacementBottomStart}) {
 			@dropdown.Label() {

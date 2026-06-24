@@ -8,7 +8,7 @@ templ DashboardPage() {
 	@layout("NanoKVM BMC", true, false) {
 		<link rel="stylesheet" href="/css/xterm.min.css"/>
 		<style>
-			#console-pane { display: flex; flex-direction: column; height: 100%; padding: 1rem; gap: 0; }
+			#console-pane { display: flex; flex-direction: column; height: 100%; padding: 0.25rem 0.5rem 0.5rem; gap: 0; }
 			#console-pane.expanded { position: fixed; inset: 0; z-index: 40; background: var(--background); padding: 0; }
 			#terminal-wrap { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 			#terminal { height: 100%; }

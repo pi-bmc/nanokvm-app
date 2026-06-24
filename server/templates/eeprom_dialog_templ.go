@@ -240,7 +240,7 @@ func EEPROMDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "   <div class=\"flex-1 min-h-0 overflow-y-auto pr-1\"><div id=\"eeprom-init-panel\" class=\"hidden py-10 flex flex-col items-center gap-5 text-center\"><div class=\"flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "   <div class=\"flex-1 min-h-0 overflow-y-auto no-scrollbar\"><div id=\"eeprom-init-panel\" class=\"hidden py-10 flex flex-col items-center gap-5 text-center\"><div class=\"flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -305,7 +305,7 @@ func EEPROMDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><div id=\"eeprom-preview\" class=\"h-[min(26rem,40svh)] overflow-y-auto rounded-md border border-border bg-card p-3 text-xs space-y-3\"><p class=\"text-muted-foreground italic\">Load to populate.</p></div></div></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><div id=\"eeprom-preview\" class=\"h-[min(26rem,40svh)] overflow-y-auto no-scrollbar rounded-md border border-border bg-card p-3 text-xs space-y-3\"><p class=\"text-muted-foreground italic\">Load to populate.</p></div></div></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

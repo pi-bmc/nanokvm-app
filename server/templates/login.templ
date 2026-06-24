@@ -14,14 +14,18 @@ templ LoginPage() {
 		<script src="/js/crypto-js.min.js"></script>
 		<div class="flex h-full w-full flex-col items-center justify-center p-4">
 			<form id="login-form" class="w-full max-w-sm space-y-4" onsubmit="return handleLogin(event)">
-				<div class="flex flex-col items-center pb-4">
+				<div class="flex flex-col items-center gap-2 pb-4">
 					<img
 						id="logo"
 						src="/img/favicon.ico"
 						alt="NanoKVM"
-						class="h-16 w-16 cursor-pointer"
+						class="h-12 w-12 cursor-pointer"
 						onclick="this.classList.add('animate-spin'); setTimeout(() => this.classList.remove('animate-spin'), 1000)"
 					/>
+					<div class="text-center">
+						<p class="text-lg font-bold tracking-wide">NanoKVM BMC</p>
+						<p class="text-xs text-muted-foreground">Baseboard Management Controller</p>
+					</div>
 				</div>
 				<div class="space-y-1.5">
 					@label.Label(label.Props{For: "username"}) {
@@ -35,7 +39,7 @@ templ LoginPage() {
 					}
 					@input.Input(input.Props{ID: "password", Name: "password", Type: input.TypePassword, Placeholder: "Password", Required: true})
 				</div>
-				<p id="login-error" class="text-sm text-destructive min-h-[1.25rem]"></p>
+				<p id="login-error" class="text-sm text-destructive"></p>
 				@button.Button(button.Props{ID: "login-btn", Type: button.TypeSubmit, FullWidth: true}) {
 					Sign In
 				}
@@ -69,10 +73,9 @@ templ forgotPasswordDialog() {
 				<p>
 					Refer to the <a href="https://wiki.sipeed.com/hardware/en/kvm/NanoKVM/reset.html" target="_blank" class="underline underline-offset-4 hover:text-foreground">wiki</a> { "for" } reset instructions.
 				</p>
-				<ul class="list-disc list-outside pl-5 space-y-1 text-muted-foreground">
-					<li>Default web account: <code class="rounded bg-muted px-1.5 py-0.5 text-foreground">admin/admin</code></li>
-					<li>Default SSH account: <code class="rounded bg-muted px-1.5 py-0.5 text-foreground">root/root</code></li>
-				</ul>
+				<p class="text-sm text-muted-foreground">
+					If you cannot access the console, contact your system administrator.
+				</p>
 			</div>
 			@dialog.Footer() {
 				@dialog.Close() {

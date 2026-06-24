@@ -56,7 +56,7 @@ templ EEPROMDialog() {
 			}
 			// Scrollable body — flex-1 + overflow-y-auto keeps the dialog
 			// header and footer buttons always in view.
-			<div class="flex-1 min-h-0 overflow-y-auto pr-1">
+			<div class="flex-1 min-h-0 overflow-y-auto no-scrollbar">
 			// First-time setup panel: shown when no EEPROM image is on the FAT.
 			// Hidden once the operator initializes or an image is found.
 			<div id="eeprom-init-panel" class="hidden py-10 flex flex-col items-center gap-5 text-center">
@@ -100,7 +100,7 @@ templ EEPROMDialog() {
 							<span>Re-parse</span>
 						}
 					</div>
-					<div id="eeprom-preview" class="h-[min(26rem,40svh)] overflow-y-auto rounded-md border border-border bg-card p-3 text-xs space-y-3">
+					<div id="eeprom-preview" class="h-[min(26rem,40svh)] overflow-y-auto no-scrollbar rounded-md border border-border bg-card p-3 text-xs space-y-3">
 						<p class="text-muted-foreground italic">Load to populate.</p>
 					</div>
 				</div>

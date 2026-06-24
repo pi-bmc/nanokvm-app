@@ -65,36 +65,7 @@ func VirtualMediaMenu() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var4 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = icon.HardDrive().Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <span>Virtual Media</span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = icon.ChevronDown().Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = button.Button(button.Props{
-					Variant: button.VariantGhost,
-					Size:    button.SizeSm,
-				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<button class=\"nav-item\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" x2=\"2\" y1=\"12\" y2=\"12\"></line><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path><line x1=\"6\" x2=\"6.01\" y1=\"16\" y2=\"16\"></line><line x1=\"10\" x2=\"10.01\" y1=\"16\" y2=\"16\"></line></svg> <span>Virtual Media</span> <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"opacity-60\"><path d=\"m6 9 6 6 6-6\"></path></svg></button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -110,7 +81,7 @@ func VirtualMediaMenu() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var5 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var4 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -136,7 +107,7 @@ func VirtualMediaMenu() templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dropdown.Content(dropdown.ContentProps{Class: "w-96 p-0", Placement: dropdown.PlacementBottomStart}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dropdown.Content(dropdown.ContentProps{Class: "w-96 p-0", Placement: dropdown.PlacementBottomStart}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -171,9 +142,9 @@ func vmCurrentView() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var6 == nil {
-			templ_7745c5c3_Var6 = templ.NopComponent
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div id=\"nav-vm-view\" class=\"flex flex-col gap-3 p-3\"><div><div class=\"text-sm font-semibold\">Virtual Media</div><div class=\"text-xs text-muted-foreground\">Mount an image to boot from or install an OS.</div></div><div id=\"nav-vm-card\" class=\"flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-5 text-center\"><div class=\"flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground\">")
@@ -188,7 +159,7 @@ func vmCurrentView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var7 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var6 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -212,11 +183,11 @@ func vmCurrentView() templ.Component {
 			Size:       button.SizeSm,
 			Class:      "hidden",
 			Attributes: templ.Attributes{"onclick": "navVmEject()"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var8 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var7 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -238,11 +209,11 @@ func vmCurrentView() templ.Component {
 			Variant:    button.VariantOutline,
 			Size:       button.SizeSm,
 			Attributes: templ.Attributes{"onclick": "window.tui?.popover?.closeNearest(this)"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var8 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -271,7 +242,7 @@ func vmCurrentView() templ.Component {
 		templ_7745c5c3_Err = button.Button(button.Props{
 			Size:       button.SizeSm,
 			Attributes: templ.Attributes{"onclick": "navVmShowAdd()"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -300,16 +271,16 @@ func vmAddView() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
+		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var9 == nil {
+			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div id=\"nav-vm-add\" class=\"hidden flex flex-col gap-3 p-3\"><div class=\"flex items-center justify-between\"><div class=\"text-sm font-semibold\">Add New Media</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var10 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -339,7 +310,7 @@ func vmAddView() templ.Component {
 			Variant:    button.VariantGhost,
 			Size:       button.SizeSm,
 			Attributes: templ.Attributes{"onclick": "navVmShowView()"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -347,7 +318,7 @@ func vmAddView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -365,7 +336,7 @@ func vmAddView() templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = label.Label(label.Props{For: "nav-vm-select", Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = label.Label(label.Props{For: "nav-vm-select", Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -373,7 +344,7 @@ func vmAddView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -394,7 +365,7 @@ func vmAddView() templ.Component {
 		templ_7745c5c3_Err = button.Button(button.Props{
 			Size:       button.SizeSm,
 			Attributes: templ.Attributes{"onclick": "navVmInsert()"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -410,7 +381,7 @@ func vmAddView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var14 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -428,7 +399,7 @@ func vmAddView() templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = label.Label(label.Props{For: "nav-vm-file", Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = label.Label(label.Props{For: "nav-vm-file", Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -445,7 +416,7 @@ func vmAddView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var14 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -466,7 +437,7 @@ func vmAddView() templ.Component {
 		templ_7745c5c3_Err = button.Button(button.Props{
 			Size:       button.SizeSm,
 			Attributes: templ.Attributes{"onclick": "navVmUpload()"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -482,7 +453,7 @@ func vmAddView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var16 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -500,7 +471,7 @@ func vmAddView() templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = label.Label(label.Props{For: "nav-vm-url", Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = label.Label(label.Props{For: "nav-vm-url", Class: "text-xs text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -524,7 +495,7 @@ func vmAddView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var16 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -545,7 +516,7 @@ func vmAddView() templ.Component {
 		templ_7745c5c3_Err = button.Button(button.Props{
 			Size:       button.SizeSm,
 			Attributes: templ.Attributes{"onclick": "navVmFetch()"},
-		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -573,9 +544,9 @@ func virtualMediaScript() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var18 == nil {
-			templ_7745c5c3_Var18 = templ.NopComponent
+		templ_7745c5c3_Var17 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var17 == nil {
+			templ_7745c5c3_Var17 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<script>\n\t\tasync function navVmRefresh() {\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/firmware/media', { headers: getAuthHeaders() });\n\t\t\t\tif (!r.ok) return;\n\t\t\t\tconst data = await r.json();\n\n\t\t\t\tconst sel = document.getElementById('nav-vm-select');\n\t\t\t\tconst prev = sel.value;\n\t\t\t\tsel.innerHTML = '<option value=\"\">— select ISO —</option>';\n\t\t\t\t(data.files || []).forEach(f => {\n\t\t\t\t\tconst o = document.createElement('option');\n\t\t\t\t\to.value = f; o.textContent = f;\n\t\t\t\t\tsel.appendChild(o);\n\t\t\t\t});\n\t\t\t\tif (prev && (data.files || []).includes(prev)) sel.value = prev;\n\n\t\t\t\tconst title = document.getElementById('nav-vm-title');\n\t\t\t\tconst sub = document.getElementById('nav-vm-sub');\n\t\t\t\tconst eject = document.getElementById('nav-vm-eject');\n\t\t\t\tif (data.inserted) {\n\t\t\t\t\ttitle.textContent = data.inserted;\n\t\t\t\t\ttitle.classList.add('text-green-500');\n\t\t\t\t\tsub.textContent = 'Mounted as virtual media';\n\t\t\t\t\teject.classList.remove('hidden');\n\t\t\t\t} else {\n\t\t\t\t\ttitle.textContent = 'No mounted media';\n\t\t\t\t\ttitle.classList.remove('text-green-500');\n\t\t\t\t\tsub.textContent = 'Add a file to get started';\n\t\t\t\t\teject.classList.add('hidden');\n\t\t\t\t}\n\t\t\t} catch(e) {}\n\t\t}\n\t\tnavVmRefresh();\n\n\t\tfunction navVmShowAdd() {\n\t\t\tdocument.getElementById('nav-vm-view').classList.add('hidden');\n\t\t\tdocument.getElementById('nav-vm-add').classList.remove('hidden');\n\t\t}\n\t\tfunction navVmShowView() {\n\t\t\tdocument.getElementById('nav-vm-add').classList.add('hidden');\n\t\t\tdocument.getElementById('nav-vm-view').classList.remove('hidden');\n\t\t}\n\n\t\tasync function navVmInsert() {\n\t\t\tconst name = document.getElementById('nav-vm-select').value;\n\t\t\tconst status = document.getElementById('nav-vm-add-status');\n\t\t\tif (!name) { status.textContent = 'Select an ISO first'; return; }\n\t\t\tstatus.textContent = 'Mounting…';\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/firmware/media/insert', {\n\t\t\t\t\tmethod: 'POST', headers: getAuthHeaders(),\n\t\t\t\t\tbody: JSON.stringify({ name }),\n\t\t\t\t});\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tstatus.textContent = '';\n\t\t\t\t\tnavVmRefresh();\n\t\t\t\t\tnavVmShowView();\n\t\t\t\t\tif (typeof loadFirmwareInfo === 'function') loadFirmwareInfo();\n\t\t\t\t} else {\n\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\tstatus.textContent = 'Error: ' + (err.error || r.statusText);\n\t\t\t\t}\n\t\t\t} catch(e) { status.textContent = 'Error: ' + e.message; }\n\t\t}\n\n\t\tasync function navVmEject() {\n\t\t\tconst status = document.getElementById('nav-vm-status');\n\t\t\tstatus.textContent = 'Ejecting…';\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/firmware/media/eject', {\n\t\t\t\t\tmethod: 'POST', headers: getAuthHeaders(),\n\t\t\t\t});\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tstatus.textContent = '';\n\t\t\t\t\tnavVmRefresh();\n\t\t\t\t\tif (typeof loadFirmwareInfo === 'function') loadFirmwareInfo();\n\t\t\t\t} else {\n\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\tstatus.textContent = 'Error: ' + (err.error || r.statusText);\n\t\t\t\t}\n\t\t\t} catch(e) { status.textContent = 'Error: ' + e.message; }\n\t\t}\n\n\t\tasync function navVmUpload() {\n\t\t\tconst fileInput = document.getElementById('nav-vm-file');\n\t\t\tconst status = document.getElementById('nav-vm-add-status');\n\t\t\tif (!fileInput.files || !fileInput.files.length) {\n\t\t\t\tstatus.textContent = 'Select a file first';\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tconst token = getCookie('nano-kvm-token') || '';\n\t\t\tconst form = new FormData();\n\t\t\tform.append('file', fileInput.files[0]);\n\t\t\tstatus.textContent = 'Uploading…';\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/firmware/media/upload', {\n\t\t\t\t\tmethod: 'POST', headers: { 'token': token }, body: form,\n\t\t\t\t});\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tconst d = await r.json();\n\t\t\t\t\tstatus.textContent = 'Saved: ' + d.file;\n\t\t\t\t\tfileInput.value = '';\n\t\t\t\t\tnavVmRefresh();\n\t\t\t\t} else {\n\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\tstatus.textContent = 'Error: ' + (err.error || r.statusText);\n\t\t\t\t}\n\t\t\t} catch(e) { status.textContent = 'Error: ' + e.message; }\n\t\t}\n\n\t\tasync function navVmFetch() {\n\t\t\tconst urlInput = document.getElementById('nav-vm-url');\n\t\t\tconst nameInput = document.getElementById('nav-vm-url-name');\n\t\t\tconst status = document.getElementById('nav-vm-add-status');\n\t\t\tconst isoUrl = urlInput.value.trim();\n\t\t\tif (!isoUrl) { status.textContent = 'Enter a URL first'; return; }\n\t\t\tstatus.textContent = 'Fetching…';\n\t\t\ttry {\n\t\t\t\tconst r = await fetch('/api/firmware/media/fetch', {\n\t\t\t\t\tmethod: 'POST', headers: getAuthHeaders(),\n\t\t\t\t\tbody: JSON.stringify({ url: isoUrl, name: nameInput.value.trim() || undefined }),\n\t\t\t\t});\n\t\t\t\tif (r.ok) {\n\t\t\t\t\tconst d = await r.json();\n\t\t\t\t\tstatus.textContent = 'Saved: ' + d.file;\n\t\t\t\t\turlInput.value = '';\n\t\t\t\t\tnameInput.value = '';\n\t\t\t\t\tnavVmRefresh();\n\t\t\t\t} else {\n\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\tstatus.textContent = 'Error: ' + (err.error || r.statusText);\n\t\t\t\t}\n\t\t\t} catch(e) { status.textContent = 'Error: ' + e.message; }\n\t\t}\n\t</script>")

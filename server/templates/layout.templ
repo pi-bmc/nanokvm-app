@@ -141,6 +141,10 @@ templ templuiFallback() {
 		.api-md table      { width: 100%; border-collapse: collapse; font-size: .8125rem; margin: .6em 0; }
 		.api-md th, .api-md td { border: 1px solid var(--border); padding: .35rem .5rem; text-align: left; }
 		.api-md th         { background: color-mix(in oklab, var(--muted) 40%, transparent); font-weight: 600; }
+
+		/* Hides scrollbar visually while preserving scroll behaviour. */
+		.no-scrollbar { scrollbar-width: none; }
+		.no-scrollbar::-webkit-scrollbar { display: none; }
 	</style>
 }
 

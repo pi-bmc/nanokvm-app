@@ -50,7 +50,7 @@ func LoginPage() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script src=\"/js/crypto-js.min.js\"></script> <div class=\"flex h-full w-full flex-col items-center justify-center p-4\"><form id=\"login-form\" class=\"w-full max-w-sm space-y-4\" onsubmit=\"return handleLogin(event)\"><div class=\"flex flex-col items-center pb-4\"><img id=\"logo\" src=\"/img/favicon.ico\" alt=\"NanoKVM\" class=\"h-16 w-16 cursor-pointer\" onclick=\"this.classList.add('animate-spin'); setTimeout(() => this.classList.remove('animate-spin'), 1000)\"></div><div class=\"space-y-1.5\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script src=\"/js/crypto-js.min.js\"></script> <div class=\"flex h-full w-full flex-col items-center justify-center p-4\"><form id=\"login-form\" class=\"w-full max-w-sm space-y-4\" onsubmit=\"return handleLogin(event)\"><div class=\"flex flex-col items-center gap-2 pb-4\"><img id=\"logo\" src=\"/img/favicon.ico\" alt=\"NanoKVM\" class=\"h-12 w-12 cursor-pointer\" onclick=\"this.classList.add('animate-spin'); setTimeout(() => this.classList.remove('animate-spin'), 1000)\"><div class=\"text-center\"><p class=\"text-lg font-bold tracking-wide\">NanoKVM BMC</p><p class=\"text-xs text-muted-foreground\">Baseboard Management Controller</p></div></div><div class=\"space-y-1.5\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -110,7 +110,7 @@ func LoginPage() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><p id=\"login-error\" class=\"text-sm text-destructive min-h-[1.25rem]\"></p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><p id=\"login-error\" class=\"text-sm text-destructive\"></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -307,13 +307,13 @@ func forgotPasswordDialog() templ.Component {
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs("for")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `login.templ`, Line: 70, Col: 178}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `login.templ`, Line: 74, Col: 178}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, " reset instructions.</p><ul class=\"list-disc list-outside pl-5 space-y-1 text-muted-foreground\"><li>Default web account: <code class=\"rounded bg-muted px-1.5 py-0.5 text-foreground\">admin/admin</code></li><li>Default SSH account: <code class=\"rounded bg-muted px-1.5 py-0.5 text-foreground\">root/root</code></li></ul></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, " reset instructions.</p><p class=\"text-sm text-muted-foreground\">If you cannot access the console, contact your system administrator.</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
