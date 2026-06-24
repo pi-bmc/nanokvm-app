@@ -171,7 +171,8 @@ func (c *Controller) readBootconfFromImage() (text, source, version string, vers
 // We never download or overwrite pieeprom.bin ourselves: the live dump
 // is the recovery source for the host, so it has to remain whatever the
 // EEPROM actually contains. Callers that get ErrNoPieepromBin should
-// prompt the operator to reboot the host so U-Boot writes one.
+// direct the operator to run the explicit first-time setup (initialize)
+// flow so they can opt in to downloading a base image.
 //
 // Returns the new summary so the UI doesn't need a follow-up GET. The
 // returned Pending is always true on success.
@@ -458,10 +459,11 @@ func (c *Controller) CancelEEPROMUpdate() error {
 }
 
 // ErrNoPieepromBin signals that the live EEPROM dump U-Boot writes on
-// each boot isn't on the FAT yet. The BMC deliberately does not fetch
-// pieeprom.bin from upstream — overwriting it would destroy the
-// recovery source for the host, so the only fix is rebooting the host
-// so U-Boot writes a fresh dump.
+// each boot isn't on the FAT yet. Most callers now fall back to
+// downloading the latest upstream image for first-time setup rather
+// than propagating this error. It is still returned by
+// loadEEPROMSourceImage when a true "no local image" state needs to be
+// distinguished from other read failures.
 var ErrNoPieepromBin = errors.New("pieeprom.bin not yet written by U-Boot; reboot the host")
 
 // EnsureRecoveryBin makes sure recovery.bin is present on the FAT. It is
@@ -539,9 +541,8 @@ func (c *Controller) LatestPieepromImage(ctx context.Context) (*eepromupdater.Im
 // pieeprom.bin itself is never touched — it remains the live dump U-Boot
 // wrote on last boot, available as the host's recovery source.
 //
-// Returns ErrNoPieepromBin when neither pieeprom.upd nor pieeprom.bin is
-// on the FAT: we have no preserved config to transplant in that case and
-// the only fix is rebooting the host so U-Boot writes a fresh dump.
+// On first-time setup (no pieeprom.bin or pieeprom.upd present) the new
+// image is staged with its default bootconf rather than failing.
 func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfigSummary, error) {
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -550,17 +551,23 @@ func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfi
 	}
 
 	// 1. Preserve current bootconf from the live image (or chained .upd).
+	//    On first-time setup there is no local image; proceed with nil so
+	//    the new image's default bootconf is used unchanged.
+	var preservedBootconf []byte
 	source, sourceName, err := c.loadEEPROMSourceImage()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoPieepromBin) {
 		return EEPROMConfigSummary{}, err
-	}
-	currentImg, err := rpieeprom.ParseBytes(source)
-	if err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("parse %s: %w", sourceName, err)
-	}
-	preservedBootconf, err := currentImg.GetFile(rpieeprom.BootConfTxt)
-	if err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("extract bootconf from %s: %w", sourceName, err)
+	} else if err == nil {
+		currentImg, err := rpieeprom.ParseBytes(source)
+		if err != nil {
+			return EEPROMConfigSummary{}, fmt.Errorf("parse %s: %w", sourceName, err)
+		}
+		preservedBootconf, err = currentImg.GetFile(rpieeprom.BootConfTxt)
+		if err != nil {
+			return EEPROMConfigSummary{}, fmt.Errorf("extract bootconf from %s: %w", sourceName, err)
+		}
+	} else {
+		log.Infof("eeprom: no local image for upgrade; staging with default bootconf")
 	}
 
 	// 2. Find + download the latest upstream pieeprom-*.bin.
@@ -581,9 +588,12 @@ func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfi
 		return EEPROMConfigSummary{}, fmt.Errorf("parse downloaded %s: %w", latest.Name, err)
 	}
 
-	// 3. Transplant preserved bootconf into the new image.
-	if err := newImg.UpdateFile(rpieeprom.BootConfTxt, preservedBootconf); err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("transplant bootconf into %s: %w", latest.Name, err)
+	// 3. Transplant preserved bootconf into the new image (skipped on first-time
+	//    setup so the upstream default config is kept intact).
+	if preservedBootconf != nil {
+		if err := newImg.UpdateFile(rpieeprom.BootConfTxt, preservedBootconf); err != nil {
+			return EEPROMConfigSummary{}, fmt.Errorf("transplant bootconf into %s: %w", latest.Name, err)
+		}
 	}
 
 	// 4. Stage as pieeprom.upd (+ pieeprom.sig) + recovery.bin from the
@@ -605,8 +615,7 @@ func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfi
 // loadEEPROMSourceImage reads the EEPROM image we should mutate when
 // staging a new pieeprom.upd: the existing pending .upd first (so two
 // edits in a row chain), else the live pieeprom.bin U-Boot wrote on the
-// last host boot. Returns ErrNoPieepromBin if neither is present so the
-// caller can prompt the operator to reboot the host.
+// last host boot. Returns ErrNoPieepromBin if neither is present.
 func (c *Controller) loadEEPROMSourceImage() ([]byte, string, error) {
 	if data, err := c.ReadFileFromImage(eepromPendingFile); err == nil && len(data) > 0 {
 		return data, eepromPendingFile, nil

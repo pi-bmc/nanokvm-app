@@ -5,6 +5,7 @@ import (
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/components/separator"
 	"github.com/templui/templui/components/textarea"
 )
 
@@ -53,7 +54,25 @@ templ EEPROMDialog() {
 					RPi 5 bootloader settings, edited via the same <code class="rounded bg-muted px-1 text-foreground">bootconf.txt</code> section <code class="rounded bg-muted px-1 text-foreground">rpi-eeprom-config</code> manipulates. Saved changes stage <code class="rounded bg-muted px-1 text-foreground">pieeprom.upd</code> on the firmware image; the host's <code class="rounded bg-muted px-1 text-foreground">rpi-eeprom-update</code> flashes the EEPROM on the next boot.
 				}
 			}
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+			// First-time setup panel: shown when no EEPROM image is on the FAT.
+			// Hidden once the operator initializes or an image is found.
+			<div id="eeprom-init-panel" class="hidden py-10 flex flex-col items-center gap-5 text-center">
+				<div class="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+					@icon.HardDrive()
+				</div>
+				<div class="space-y-2 max-w-sm">
+					<p class="font-medium">No EEPROM image found</p>
+					<p class="text-sm text-muted-foreground">
+						<code class="rounded bg-muted px-1 text-foreground">pieeprom.bin</code> is not yet on the firmware FAT — U-Boot writes it on each host boot. To configure the bootloader now, initialize with the latest stable upstream image.
+					</p>
+					<p class="text-xs text-muted-foreground">
+						The downloaded image will be staged as <code class="rounded bg-muted px-1 text-foreground">pieeprom.upd</code>. You can edit settings before the next boot flashes it.
+					</p>
+				</div>
+				@separator.Separator()
+				<p class="text-xs text-muted-foreground">Alternatively, reboot the host so U-Boot writes a fresh <code class="rounded bg-muted px-1 text-foreground">pieeprom.bin</code> dump, then reload.</p>
+			</div>
+			<div id="eeprom-editor-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
 				<div class="space-y-1.5">
 					<div class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Editor</div>
 					@textarea.Textarea(textarea.Props{
@@ -89,6 +108,15 @@ templ EEPROMDialog() {
 						Cancel
 					}
 				}
+				// First-time setup: hidden until loadEEPROMConfig detects no local image.
+				@button.Button(button.Props{
+					ID:         "eeprom-init",
+					Class:      "hidden",
+					Attributes: templ.Attributes{"onclick": "initializeEEPROM()", "title": "Download the latest stable bootloader and stage as pieeprom.upd"},
+				}) {
+					@icon.Download()
+					<span>Initialize EEPROM</span>
+				}
 				// Discard-pending button only meaningful when an update is
 				// staged. Hidden until loadEEPROMConfig flips it on.
 				@button.Button(button.Props{
@@ -121,6 +149,7 @@ templ EEPROMDialog() {
 					Upgrade bootloader
 				}
 				@button.Button(button.Props{
+					ID:         "eeprom-reload",
 					Variant:    button.VariantOutline,
 					Attributes: templ.Attributes{"onclick": "loadEEPROMConfig()", "title": "Reload from device"},
 				}) {
@@ -146,6 +175,29 @@ templ eepromDialogScript() {
 			const preview = () => document.getElementById('eeprom-preview');
 			const status  = () => document.getElementById('eeprom-status');
 			const saveBtn = () => document.getElementById('eeprom-save');
+
+			// Editor-only buttons hidden during first-time setup.
+			const editorOnlyIds = ['eeprom-save', 'eeprom-reload', 'eeprom-upgrade', 'eeprom-refresh-bin'];
+
+			function showInitView() {
+				document.getElementById('eeprom-init-panel').classList.remove('hidden');
+				document.getElementById('eeprom-editor-grid').classList.add('hidden');
+				document.getElementById('eeprom-init').classList.remove('hidden');
+				for (const id of editorOnlyIds) {
+					const el = document.getElementById(id);
+					if (el) el.classList.add('hidden');
+				}
+			}
+
+			function showEditorView() {
+				document.getElementById('eeprom-init-panel').classList.add('hidden');
+				document.getElementById('eeprom-editor-grid').classList.remove('hidden');
+				document.getElementById('eeprom-init').classList.add('hidden');
+				for (const id of editorOnlyIds) {
+					const el = document.getElementById(id);
+					if (el) el.classList.remove('hidden');
+				}
+			}
 
 			function setStatus(msg, cls) {
 				const s = status();
@@ -305,17 +357,49 @@ templ eepromDialogScript() {
 						return;
 					}
 					const data = await r.json();
+					// First-time setup: no image on the FAT yet. Show the init
+					// prompt and let the operator opt in to downloading one.
+					if (!data.pieepromBinPresent && !data.pending) {
+						showInitView();
+						setStatus('No EEPROM image on the firmware FAT.');
+						return;
+					}
+					showEditorView();
 					editor().value = data.raw || '';
 					buildCatalogIndex(data);
 					renderPreview(data);
 					applyPendingChrome(data);
-					if (!data.raw) {
-						setStatus('No pieeprom.bin on the FAT yet — reboot the host so U-Boot writes a fresh dump.');
-					} else {
-						setStatus(describeState(data));
-					}
+					setStatus(describeState(data));
 				} catch(e) {
 					setStatus('Error: ' + e.message, 'text-destructive');
+				}
+			};
+
+			window.initializeEEPROM = async function() {
+				const btn = document.getElementById('eeprom-init');
+				btn.disabled = true;
+				setStatus('Downloading latest stable bootloader…');
+				try {
+					const r = await fetch('/api/firmware/eeprom/upgrade', {
+						method: 'POST',
+						headers: getAuthHeaders(),
+					});
+					if (!r.ok) {
+						const err = await r.json().catch(() => ({}));
+						setStatus('Error: ' + (err.error || r.statusText), 'text-destructive');
+						return;
+					}
+					const data = await r.json();
+					showEditorView();
+					editor().value = data.raw || '';
+					buildCatalogIndex(data);
+					renderPreview(data);
+					applyPendingChrome(data);
+					setStatus('EEPROM initialized — staged as pieeprom.upd. Edit settings, then reboot to flash.', 'text-green-500');
+				} catch(e) {
+					setStatus('Error: ' + e.message, 'text-destructive');
+				} finally {
+					btn.disabled = false;
 				}
 			};
 

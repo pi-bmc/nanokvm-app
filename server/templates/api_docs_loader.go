@@ -114,10 +114,10 @@ type APIDocsResponse struct {
 // items / oneOf variants. Cycles in the OpenAPI doc are broken by
 // returning a leaf with RefName set and Properties left nil.
 type APIDocsSchema struct {
-	Type        string   // "object" | "array" | "string" | "integer" | "number" | "boolean" | "" for refs/composition
-	Format      string   // e.g. "int32", "date-time"
+	Type        string // "object" | "array" | "string" | "integer" | "number" | "boolean" | "" for refs/composition
+	Format      string // e.g. "int32", "date-time"
 	Description string
-	Example     string   // raw value rendered as text
+	Example     string // raw value rendered as text
 	Default     string
 	Enum        []string
 	// RefName is the component-schemas key when this node originated as

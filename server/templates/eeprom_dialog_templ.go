@@ -13,6 +13,7 @@ import (
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/components/separator"
 	"github.com/templui/templui/components/textarea"
 )
 
@@ -239,7 +240,23 @@ func EEPROMDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " <div class=\"grid grid-cols-1 md:grid-cols-2 gap-4 py-2\"><div class=\"space-y-1.5\"><div class=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">Editor</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "   <div id=\"eeprom-init-panel\" class=\"hidden py-10 flex flex-col items-center gap-5 text-center\"><div class=\"flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = icon.HardDrive().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div><div class=\"space-y-2 max-w-sm\"><p class=\"font-medium\">No EEPROM image found</p><p class=\"text-sm text-muted-foreground\"><code class=\"rounded bg-muted px-1 text-foreground\">pieeprom.bin</code> is not yet on the firmware FAT — U-Boot writes it on each host boot. To configure the bootloader now, initialize with the latest stable upstream image.</p><p class=\"text-xs text-muted-foreground\">The downloaded image will be staged as <code class=\"rounded bg-muted px-1 text-foreground\">pieeprom.upd</code>. You can edit settings before the next boot flashes it.</p></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = separator.Separator().Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<p class=\"text-xs text-muted-foreground\">Alternatively, reboot the host so U-Boot writes a fresh <code class=\"rounded bg-muted px-1 text-foreground\">pieeprom.bin</code> dump, then reload.</p></div><div id=\"eeprom-editor-grid\" class=\"grid grid-cols-1 md:grid-cols-2 gap-4 py-2\"><div class=\"space-y-1.5\"><div class=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">Editor</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -253,7 +270,7 @@ func EEPROMDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p id=\"eeprom-status\" class=\"text-[0.6875rem] text-muted-foreground min-h-[1rem]\"></p></div><div class=\"space-y-1.5\"><div class=\"flex items-center justify-between\"><div class=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">Parsed Settings</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<p id=\"eeprom-status\" class=\"text-[0.6875rem] text-muted-foreground min-h-[1rem]\"></p></div><div class=\"space-y-1.5\"><div class=\"flex items-center justify-between\"><div class=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">Parsed Settings</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -273,7 +290,7 @@ func EEPROMDialog() templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " <span>Re-parse</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, " <span>Re-parse</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -288,7 +305,7 @@ func EEPROMDialog() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div><div id=\"eeprom-preview\" class=\"h-[26rem] overflow-y-auto rounded-md border border-border bg-card p-3 text-xs space-y-3\"><p class=\"text-muted-foreground italic\">Load to populate.</p></div></div></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><div id=\"eeprom-preview\" class=\"h-[26rem] overflow-y-auto rounded-md border border-border bg-card p-3 text-xs space-y-3\"><p class=\"text-muted-foreground italic\">Load to populate.</p></div></div></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -328,7 +345,7 @@ func EEPROMDialog() templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "Cancel")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "Cancel")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -344,7 +361,7 @@ func EEPROMDialog() templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "   ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "  ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -360,22 +377,25 @@ func EEPROMDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "Discard pending")
+						templ_7745c5c3_Err = icon.Download().Render(ctx, templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, " <span>Initialize EEPROM</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
-						ID:         "eeprom-discard",
-						Variant:    button.VariantDestructive,
+						ID:         "eeprom-init",
 						Class:      "hidden",
-						Attributes: templ.Attributes{"onclick": "discardPendingEEPROM()", "title": "Remove pieeprom.upd; revert to the live config"},
+						Attributes: templ.Attributes{"onclick": "initializeEEPROM()", "title": "Download the latest stable bootloader and stage as pieeprom.upd"},
 					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "     ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "   ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -391,21 +411,22 @@ func EEPROMDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "Refresh recovery.bin")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "Discard pending")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
-						ID:         "eeprom-refresh-bin",
-						Variant:    button.VariantOutline,
-						Attributes: templ.Attributes{"onclick": "refreshRecoveryBin()", "title": "Re-download recovery.bin from raspberrypi/rpi-eeprom"},
+						ID:         "eeprom-discard",
+						Variant:    button.VariantDestructive,
+						Class:      "hidden",
+						Attributes: templ.Attributes{"onclick": "discardPendingEEPROM()", "title": "Remove pieeprom.upd; revert to the live config"},
 					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "    ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "     ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -421,21 +442,21 @@ func EEPROMDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "Upgrade bootloader")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "Refresh recovery.bin")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
-						ID:         "eeprom-upgrade",
+						ID:         "eeprom-refresh-bin",
 						Variant:    button.VariantOutline,
-						Attributes: templ.Attributes{"onclick": "upgradeEEPROMVersion()", "title": "Stage the latest upstream bootloader as pieeprom.upd, preserving current config"},
+						Attributes: templ.Attributes{"onclick": "refreshRecoveryBin()", "title": "Re-download recovery.bin from raspberrypi/rpi-eeprom"},
 					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "    ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -451,20 +472,21 @@ func EEPROMDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "Reload")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "Upgrade bootloader")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
+						ID:         "eeprom-upgrade",
 						Variant:    button.VariantOutline,
-						Attributes: templ.Attributes{"onclick": "loadEEPROMConfig()", "title": "Reload from device"},
+						Attributes: templ.Attributes{"onclick": "upgradeEEPROMVersion()", "title": "Stage the latest upstream bootloader as pieeprom.upd, preserving current config"},
 					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, " ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -480,7 +502,37 @@ func EEPROMDialog() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "Save")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "Reload")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						return nil
+					})
+					templ_7745c5c3_Err = button.Button(button.Props{
+						ID:         "eeprom-reload",
+						Variant:    button.VariantOutline,
+						Attributes: templ.Attributes{"onclick": "loadEEPROMConfig()", "title": "Reload from device"},
+					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, " ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Var20 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+						if !templ_7745c5c3_IsBuffer {
+							defer func() {
+								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+								if templ_7745c5c3_Err == nil {
+									templ_7745c5c3_Err = templ_7745c5c3_BufErr
+								}
+							}()
+						}
+						ctx = templ.InitializeContext(ctx)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "Save")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -489,7 +541,7 @@ func EEPROMDialog() templ.Component {
 					templ_7745c5c3_Err = button.Button(button.Props{
 						ID:         "eeprom-save",
 						Attributes: templ.Attributes{"onclick": "saveEEPROMConfig()"},
-					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -539,12 +591,12 @@ func eepromDialogScript() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var20 == nil {
-			templ_7745c5c3_Var20 = templ.NopComponent
+		templ_7745c5c3_Var21 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var21 == nil {
+			templ_7745c5c3_Var21 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<script>\n\t\t(function() {\n\t\t\tconst editor  = () => document.getElementById('eeprom-editor');\n\t\t\tconst preview = () => document.getElementById('eeprom-preview');\n\t\t\tconst status  = () => document.getElementById('eeprom-status');\n\t\t\tconst saveBtn = () => document.getElementById('eeprom-save');\n\n\t\t\tfunction setStatus(msg, cls) {\n\t\t\t\tconst s = status();\n\t\t\t\tif (!s) return;\n\t\t\t\ts.textContent = msg || '';\n\t\t\t\ts.classList.remove('text-destructive', 'text-green-500', 'text-muted-foreground');\n\t\t\t\ts.classList.add(cls || 'text-muted-foreground');\n\t\t\t}\n\n\t\t\t// catalogByName indexes the per-platform catalog from the API\n\t\t\t// response so renderPreview can show each row's documented\n\t\t\t// default + description. Re-built each time a fresh summary\n\t\t\t// arrives from the server.\n\t\t\tlet catalogByName = {};\n\n\t\t\tfunction buildCatalogIndex(summary) {\n\t\t\t\tconst idx = {};\n\t\t\t\tfor (const k of (summary.catalog || [])) idx[k.name] = k;\n\t\t\t\tcatalogByName = idx;\n\t\t\t}\n\n\t\t\t// rowMatchesDefault mirrors eepromkeys.IsDefault for [all].\n\t\t\t// Returns true when the value would be filtered out at save\n\t\t\t// time. Only the [all] section is filtered server-side; other\n\t\t\t// sections are always kept verbatim.\n\t\t\tfunction rowMatchesDefault(section, key, value) {\n\t\t\t\tif (section !== 'all') return false;\n\t\t\t\tconst meta = catalogByName[key];\n\t\t\t\tif (!meta || !meta.default) return false;\n\t\t\t\t// Permissive comparator: trim, lower-case hex, numeric\n\t\t\t\t// parsing for ints/bools. Matches the Go EqualValues\n\t\t\t\t// well enough for visual hinting.\n\t\t\t\tconst a = String(value).trim();\n\t\t\t\tconst b = String(meta.default).trim();\n\t\t\t\tif (a === b) return true;\n\t\t\t\tif (meta.type === 'hex') {\n\t\t\t\t\treturn a.replace(/^0x/i, '').toLowerCase() === b.replace(/^0x/i, '').toLowerCase();\n\t\t\t\t}\n\t\t\t\tif (meta.type === 'integer' || meta.type === 'bool') {\n\t\t\t\t\tconst na = Number(a), nb = Number(b);\n\t\t\t\t\treturn Number.isFinite(na) && Number.isFinite(nb) && na === nb;\n\t\t\t\t}\n\t\t\t\treturn false;\n\t\t\t}\n\n\t\t\t// renderPreview mirrors EEPROMConfigSummary returned by the API:\n\t\t\t// { raw, sections: { [name]: [{section,key,value}, ...] }, order: [...] }\n\t\t\t// We accept either a parsed payload (from API) or a string (for\n\t\t\t// in-editor re-parse) — in the string case the server isn't\n\t\t\t// re-hit; we just rebuild the visual.\n\t\t\tfunction renderPreview(summary) {\n\t\t\t\tconst pv = preview();\n\t\t\t\tif (!pv) return;\n\t\t\t\tconst order = summary.order || [];\n\t\t\t\tif (order.length === 0) {\n\t\t\t\t\tpv.innerHTML = '<p class=\"text-muted-foreground italic\">No settings parsed.</p>';\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst parts = [];\n\t\t\t\tfor (const name of order) {\n\t\t\t\t\tconst rows = (summary.sections && summary.sections[name]) || [];\n\t\t\t\t\tparts.push(`<div><div class=\"text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground mb-1\">[${escapeHTML(name)}]</div>`);\n\t\t\t\t\tparts.push('<div class=\"space-y-0.5\">');\n\t\t\t\t\tfor (const r of rows) {\n\t\t\t\t\t\tconst meta = catalogByName[r.key];\n\t\t\t\t\t\tconst isDefault = rowMatchesDefault(r.section, r.key, r.value);\n\t\t\t\t\t\tconst tooltip = meta ? escapeHTML(meta.description) : '';\n\t\t\t\t\t\tconst defaultBadge = meta && meta.default\n\t\t\t\t\t\t\t? `<span class=\"text-[0.625rem] text-muted-foreground/70 ml-2\" title=\"Documented default\">def: ${escapeHTML(meta.default)}</span>`\n\t\t\t\t\t\t\t: '';\n\t\t\t\t\t\tconst valueClasses = isDefault\n\t\t\t\t\t\t\t? 'font-mono text-muted-foreground/60 text-right break-all line-through'\n\t\t\t\t\t\t\t: 'font-mono text-muted-foreground text-right break-all';\n\t\t\t\t\t\tconst keyAttr = tooltip ? ` title=\"${tooltip}\"` : '';\n\t\t\t\t\t\tparts.push(`<div class=\"flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5\"><span class=\"font-mono\"${keyAttr}>${escapeHTML(r.key)}</span><span class=\"flex items-baseline gap-1 min-w-0\"><span class=\"${valueClasses}\">${escapeHTML(r.value)}</span>${defaultBadge}</span></div>`);\n\t\t\t\t\t}\n\t\t\t\t\tparts.push('</div></div>');\n\t\t\t\t}\n\t\t\t\t// Hint about what the strikethrough means.\n\t\t\t\tparts.unshift('<p class=\"text-[0.625rem] text-muted-foreground/70 mb-2\"><span class=\"line-through\">Strikethrough</span> = value equals the documented default and will be omitted on save.</p>');\n\t\t\t\tpv.innerHTML = parts.join('');\n\t\t\t}\n\n\t\t\tfunction escapeHTML(s) {\n\t\t\t\treturn String(s).replace(/[&<>\"']/g, (c) => ({\n\t\t\t\t\t'&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;'\n\t\t\t\t}[c]));\n\t\t\t}\n\n\t\t\t// Pure client-side parse used by Re-parse (mirrors firmware.ParseEEPROMConfig).\n\t\t\tfunction parseClient(text) {\n\t\t\t\tconst order = [], sections = {}, seen = new Set();\n\t\t\t\tlet section = 'all';\n\t\t\t\tfor (let line of (text || '').split(/\\r?\\n/)) {\n\t\t\t\t\tline = line.trim();\n\t\t\t\t\tif (!line || line.startsWith('#')) continue;\n\t\t\t\t\tif (line.startsWith('[') && line.endsWith(']')) {\n\t\t\t\t\t\tsection = line.slice(1, -1).trim() || 'all';\n\t\t\t\t\t\tcontinue;\n\t\t\t\t\t}\n\t\t\t\t\tconst eq = line.indexOf('=');\n\t\t\t\t\tif (eq <= 0) continue;\n\t\t\t\t\tconst key = line.slice(0, eq).trim();\n\t\t\t\t\tconst value = line.slice(eq + 1).trim();\n\t\t\t\t\tif (!key) continue;\n\t\t\t\t\tif (!seen.has(section)) { seen.add(section); order.push(section); }\n\t\t\t\t\t(sections[section] ||= []).push({ section, key, value });\n\t\t\t\t}\n\t\t\t\treturn { raw: text, sections, order };\n\t\t\t}\n\n\t\t\t// applyPendingChrome flips the pending badge + discard button\n\t\t\t// based on the summary's `pending`/`source` fields.\n\t\t\tfunction applyPendingChrome(summary) {\n\t\t\t\tconst badge = document.getElementById('eeprom-pending-badge');\n\t\t\t\tconst discard = document.getElementById('eeprom-discard');\n\t\t\t\tif (summary && summary.pending) {\n\t\t\t\t\tbadge.classList.remove('hidden');\n\t\t\t\t\tdiscard.classList.remove('hidden');\n\t\t\t\t} else {\n\t\t\t\t\tbadge.classList.add('hidden');\n\t\t\t\t\tdiscard.classList.add('hidden');\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction describeState(data) {\n\t\t\t\tconst parts = [];\n\t\t\t\tif (data.source === 'pieeprom.bin') {\n\t\t\t\t\tparts.push(\"Loaded live config from U-Boot's pieeprom.bin dump\");\n\t\t\t\t} else if (data.source === 'pieeprom.upd') {\n\t\t\t\t\tparts.push('Showing the staged pieeprom.upd update');\n\t\t\t\t} else if (data.source) {\n\t\t\t\t\tparts.push(`Loaded from ${data.source}`);\n\t\t\t\t}\n\t\t\t\tif (data.version) {\n\t\t\t\t\tparts.push(`bootloader ${data.version}`);\n\t\t\t\t}\n\t\t\t\tif (data.pending) {\n\t\t\t\t\tparts.push('a pending update is staged for the next boot');\n\t\t\t\t}\n\t\t\t\tif (!data.pieepromBinPresent) {\n\t\t\t\t\tparts.push('pieeprom.bin not yet on the FAT — reboot the host so U-Boot writes one');\n\t\t\t\t}\n\t\t\t\tif (data.pending && !data.recoveryBinPresent) {\n\t\t\t\t\tparts.push('recovery.bin missing — the staged update will not flash until it is downloaded');\n\t\t\t\t}\n\t\t\t\treturn parts.length ? parts.join(' — ') + '.' : 'Loaded.';\n\t\t\t}\n\n\t\t\twindow.loadEEPROMConfig = async function() {\n\t\t\t\tsetStatus('Loading…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom', { headers: getAuthHeaders() });\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\teditor().value = data.raw || '';\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tif (!data.raw) {\n\t\t\t\t\t\tsetStatus('No pieeprom.bin on the FAT yet — reboot the host so U-Boot writes a fresh dump.');\n\t\t\t\t\t} else {\n\t\t\t\t\t\tsetStatus(describeState(data));\n\t\t\t\t\t}\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.discardPendingEEPROM = async function() {\n\t\t\t\tif (!confirm('Discard the pending EEPROM update? The next boot will keep the current EEPROM unchanged.')) return;\n\t\t\t\tconst btn = document.getElementById('eeprom-discard');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Discarding…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/pending', {\n\t\t\t\t\t\tmethod: 'DELETE',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok && r.status !== 204) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tsetStatus('Pending update discarded.', 'text-green-500');\n\t\t\t\t\tawait loadEEPROMConfig();\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.refreshRecoveryBin = async function() {\n\t\t\t\tif (!confirm('Re-download recovery.bin from raspberrypi/rpi-eeprom into the firmware FAT? pieeprom.bin is left alone — U-Boot writes it on each boot and it is the host’s recovery source.')) return;\n\t\t\t\tconst btn = document.getElementById('eeprom-refresh-bin');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Fetching latest recovery.bin…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/recovery/refresh', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('recovery.bin refreshed from upstream.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.upgradeEEPROMVersion = async function() {\n\t\t\t\tif (!confirm('Stage a bootloader version upgrade?\\n\\nThe latest upstream pieeprom-*.bin will be downloaded and written as pieeprom.upd, with your current bootconf transplanted into it. recovery.bin is staged alongside. The live pieeprom.bin is untouched.')) return;\n\t\t\t\tconst btn = document.getElementById('eeprom-upgrade');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Downloading latest bootloader and staging…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/upgrade', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\teditor().value = data.raw || '';\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('Bootloader upgrade staged as pieeprom.upd. rpi-eeprom-update will flash on the next boot.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.refreshEEPROMPreview = function() {\n\t\t\t\trenderPreview(parseClient(editor().value));\n\t\t\t};\n\n\t\t\twindow.saveEEPROMConfig = async function() {\n\t\t\t\tconst btn = saveBtn();\n\t\t\t\tconst content = editor().value;\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Staging update…');\n\t\t\t\ttry {\n\t\t\t\t\t// The server mutates the live pieeprom.bin U-Boot wrote on\n\t\t\t\t\t// the last host boot. If pieeprom.bin isn't on the FAT\n\t\t\t\t\t// yet the server returns an error — reboot the host so\n\t\t\t\t\t// U-Boot writes one.\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom', {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t\tbody: JSON.stringify({ content }),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('Staged as pieeprom.upd. rpi-eeprom-update will flash on the next boot.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\t// Live re-parse as user edits (debounced).\n\t\t\tlet parseTimer = null;\n\t\t\tdocument.addEventListener('input', (e) => {\n\t\t\t\tif (e.target && e.target.id === 'eeprom-editor') {\n\t\t\t\t\tclearTimeout(parseTimer);\n\t\t\t\t\tparseTimer = setTimeout(refreshEEPROMPreview, 250);\n\t\t\t\t}\n\t\t\t});\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<script>\n\t\t(function() {\n\t\t\tconst editor  = () => document.getElementById('eeprom-editor');\n\t\t\tconst preview = () => document.getElementById('eeprom-preview');\n\t\t\tconst status  = () => document.getElementById('eeprom-status');\n\t\t\tconst saveBtn = () => document.getElementById('eeprom-save');\n\n\t\t\t// Editor-only buttons hidden during first-time setup.\n\t\t\tconst editorOnlyIds = ['eeprom-save', 'eeprom-reload', 'eeprom-upgrade', 'eeprom-refresh-bin'];\n\n\t\t\tfunction showInitView() {\n\t\t\t\tdocument.getElementById('eeprom-init-panel').classList.remove('hidden');\n\t\t\t\tdocument.getElementById('eeprom-editor-grid').classList.add('hidden');\n\t\t\t\tdocument.getElementById('eeprom-init').classList.remove('hidden');\n\t\t\t\tfor (const id of editorOnlyIds) {\n\t\t\t\t\tconst el = document.getElementById(id);\n\t\t\t\t\tif (el) el.classList.add('hidden');\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction showEditorView() {\n\t\t\t\tdocument.getElementById('eeprom-init-panel').classList.add('hidden');\n\t\t\t\tdocument.getElementById('eeprom-editor-grid').classList.remove('hidden');\n\t\t\t\tdocument.getElementById('eeprom-init').classList.add('hidden');\n\t\t\t\tfor (const id of editorOnlyIds) {\n\t\t\t\t\tconst el = document.getElementById(id);\n\t\t\t\t\tif (el) el.classList.remove('hidden');\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction setStatus(msg, cls) {\n\t\t\t\tconst s = status();\n\t\t\t\tif (!s) return;\n\t\t\t\ts.textContent = msg || '';\n\t\t\t\ts.classList.remove('text-destructive', 'text-green-500', 'text-muted-foreground');\n\t\t\t\ts.classList.add(cls || 'text-muted-foreground');\n\t\t\t}\n\n\t\t\t// catalogByName indexes the per-platform catalog from the API\n\t\t\t// response so renderPreview can show each row's documented\n\t\t\t// default + description. Re-built each time a fresh summary\n\t\t\t// arrives from the server.\n\t\t\tlet catalogByName = {};\n\n\t\t\tfunction buildCatalogIndex(summary) {\n\t\t\t\tconst idx = {};\n\t\t\t\tfor (const k of (summary.catalog || [])) idx[k.name] = k;\n\t\t\t\tcatalogByName = idx;\n\t\t\t}\n\n\t\t\t// rowMatchesDefault mirrors eepromkeys.IsDefault for [all].\n\t\t\t// Returns true when the value would be filtered out at save\n\t\t\t// time. Only the [all] section is filtered server-side; other\n\t\t\t// sections are always kept verbatim.\n\t\t\tfunction rowMatchesDefault(section, key, value) {\n\t\t\t\tif (section !== 'all') return false;\n\t\t\t\tconst meta = catalogByName[key];\n\t\t\t\tif (!meta || !meta.default) return false;\n\t\t\t\t// Permissive comparator: trim, lower-case hex, numeric\n\t\t\t\t// parsing for ints/bools. Matches the Go EqualValues\n\t\t\t\t// well enough for visual hinting.\n\t\t\t\tconst a = String(value).trim();\n\t\t\t\tconst b = String(meta.default).trim();\n\t\t\t\tif (a === b) return true;\n\t\t\t\tif (meta.type === 'hex') {\n\t\t\t\t\treturn a.replace(/^0x/i, '').toLowerCase() === b.replace(/^0x/i, '').toLowerCase();\n\t\t\t\t}\n\t\t\t\tif (meta.type === 'integer' || meta.type === 'bool') {\n\t\t\t\t\tconst na = Number(a), nb = Number(b);\n\t\t\t\t\treturn Number.isFinite(na) && Number.isFinite(nb) && na === nb;\n\t\t\t\t}\n\t\t\t\treturn false;\n\t\t\t}\n\n\t\t\t// renderPreview mirrors EEPROMConfigSummary returned by the API:\n\t\t\t// { raw, sections: { [name]: [{section,key,value}, ...] }, order: [...] }\n\t\t\t// We accept either a parsed payload (from API) or a string (for\n\t\t\t// in-editor re-parse) — in the string case the server isn't\n\t\t\t// re-hit; we just rebuild the visual.\n\t\t\tfunction renderPreview(summary) {\n\t\t\t\tconst pv = preview();\n\t\t\t\tif (!pv) return;\n\t\t\t\tconst order = summary.order || [];\n\t\t\t\tif (order.length === 0) {\n\t\t\t\t\tpv.innerHTML = '<p class=\"text-muted-foreground italic\">No settings parsed.</p>';\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tconst parts = [];\n\t\t\t\tfor (const name of order) {\n\t\t\t\t\tconst rows = (summary.sections && summary.sections[name]) || [];\n\t\t\t\t\tparts.push(`<div><div class=\"text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground mb-1\">[${escapeHTML(name)}]</div>`);\n\t\t\t\t\tparts.push('<div class=\"space-y-0.5\">');\n\t\t\t\t\tfor (const r of rows) {\n\t\t\t\t\t\tconst meta = catalogByName[r.key];\n\t\t\t\t\t\tconst isDefault = rowMatchesDefault(r.section, r.key, r.value);\n\t\t\t\t\t\tconst tooltip = meta ? escapeHTML(meta.description) : '';\n\t\t\t\t\t\tconst defaultBadge = meta && meta.default\n\t\t\t\t\t\t\t? `<span class=\"text-[0.625rem] text-muted-foreground/70 ml-2\" title=\"Documented default\">def: ${escapeHTML(meta.default)}</span>`\n\t\t\t\t\t\t\t: '';\n\t\t\t\t\t\tconst valueClasses = isDefault\n\t\t\t\t\t\t\t? 'font-mono text-muted-foreground/60 text-right break-all line-through'\n\t\t\t\t\t\t\t: 'font-mono text-muted-foreground text-right break-all';\n\t\t\t\t\t\tconst keyAttr = tooltip ? ` title=\"${tooltip}\"` : '';\n\t\t\t\t\t\tparts.push(`<div class=\"flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5\"><span class=\"font-mono\"${keyAttr}>${escapeHTML(r.key)}</span><span class=\"flex items-baseline gap-1 min-w-0\"><span class=\"${valueClasses}\">${escapeHTML(r.value)}</span>${defaultBadge}</span></div>`);\n\t\t\t\t\t}\n\t\t\t\t\tparts.push('</div></div>');\n\t\t\t\t}\n\t\t\t\t// Hint about what the strikethrough means.\n\t\t\t\tparts.unshift('<p class=\"text-[0.625rem] text-muted-foreground/70 mb-2\"><span class=\"line-through\">Strikethrough</span> = value equals the documented default and will be omitted on save.</p>');\n\t\t\t\tpv.innerHTML = parts.join('');\n\t\t\t}\n\n\t\t\tfunction escapeHTML(s) {\n\t\t\t\treturn String(s).replace(/[&<>\"']/g, (c) => ({\n\t\t\t\t\t'&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;'\n\t\t\t\t}[c]));\n\t\t\t}\n\n\t\t\t// Pure client-side parse used by Re-parse (mirrors firmware.ParseEEPROMConfig).\n\t\t\tfunction parseClient(text) {\n\t\t\t\tconst order = [], sections = {}, seen = new Set();\n\t\t\t\tlet section = 'all';\n\t\t\t\tfor (let line of (text || '').split(/\\r?\\n/)) {\n\t\t\t\t\tline = line.trim();\n\t\t\t\t\tif (!line || line.startsWith('#')) continue;\n\t\t\t\t\tif (line.startsWith('[') && line.endsWith(']')) {\n\t\t\t\t\t\tsection = line.slice(1, -1).trim() || 'all';\n\t\t\t\t\t\tcontinue;\n\t\t\t\t\t}\n\t\t\t\t\tconst eq = line.indexOf('=');\n\t\t\t\t\tif (eq <= 0) continue;\n\t\t\t\t\tconst key = line.slice(0, eq).trim();\n\t\t\t\t\tconst value = line.slice(eq + 1).trim();\n\t\t\t\t\tif (!key) continue;\n\t\t\t\t\tif (!seen.has(section)) { seen.add(section); order.push(section); }\n\t\t\t\t\t(sections[section] ||= []).push({ section, key, value });\n\t\t\t\t}\n\t\t\t\treturn { raw: text, sections, order };\n\t\t\t}\n\n\t\t\t// applyPendingChrome flips the pending badge + discard button\n\t\t\t// based on the summary's `pending`/`source` fields.\n\t\t\tfunction applyPendingChrome(summary) {\n\t\t\t\tconst badge = document.getElementById('eeprom-pending-badge');\n\t\t\t\tconst discard = document.getElementById('eeprom-discard');\n\t\t\t\tif (summary && summary.pending) {\n\t\t\t\t\tbadge.classList.remove('hidden');\n\t\t\t\t\tdiscard.classList.remove('hidden');\n\t\t\t\t} else {\n\t\t\t\t\tbadge.classList.add('hidden');\n\t\t\t\t\tdiscard.classList.add('hidden');\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction describeState(data) {\n\t\t\t\tconst parts = [];\n\t\t\t\tif (data.source === 'pieeprom.bin') {\n\t\t\t\t\tparts.push(\"Loaded live config from U-Boot's pieeprom.bin dump\");\n\t\t\t\t} else if (data.source === 'pieeprom.upd') {\n\t\t\t\t\tparts.push('Showing the staged pieeprom.upd update');\n\t\t\t\t} else if (data.source) {\n\t\t\t\t\tparts.push(`Loaded from ${data.source}`);\n\t\t\t\t}\n\t\t\t\tif (data.version) {\n\t\t\t\t\tparts.push(`bootloader ${data.version}`);\n\t\t\t\t}\n\t\t\t\tif (data.pending) {\n\t\t\t\t\tparts.push('a pending update is staged for the next boot');\n\t\t\t\t}\n\t\t\t\tif (!data.pieepromBinPresent) {\n\t\t\t\t\tparts.push('pieeprom.bin not yet on the FAT — reboot the host so U-Boot writes one');\n\t\t\t\t}\n\t\t\t\tif (data.pending && !data.recoveryBinPresent) {\n\t\t\t\t\tparts.push('recovery.bin missing — the staged update will not flash until it is downloaded');\n\t\t\t\t}\n\t\t\t\treturn parts.length ? parts.join(' — ') + '.' : 'Loaded.';\n\t\t\t}\n\n\t\t\twindow.loadEEPROMConfig = async function() {\n\t\t\t\tsetStatus('Loading…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom', { headers: getAuthHeaders() });\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\t// First-time setup: no image on the FAT yet. Show the init\n\t\t\t\t\t// prompt and let the operator opt in to downloading one.\n\t\t\t\t\tif (!data.pieepromBinPresent && !data.pending) {\n\t\t\t\t\t\tshowInitView();\n\t\t\t\t\t\tsetStatus('No EEPROM image on the firmware FAT.');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tshowEditorView();\n\t\t\t\t\teditor().value = data.raw || '';\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus(describeState(data));\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.initializeEEPROM = async function() {\n\t\t\t\tconst btn = document.getElementById('eeprom-init');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Downloading latest stable bootloader…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/upgrade', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\tshowEditorView();\n\t\t\t\t\teditor().value = data.raw || '';\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('EEPROM initialized — staged as pieeprom.upd. Edit settings, then reboot to flash.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.discardPendingEEPROM = async function() {\n\t\t\t\tif (!confirm('Discard the pending EEPROM update? The next boot will keep the current EEPROM unchanged.')) return;\n\t\t\t\tconst btn = document.getElementById('eeprom-discard');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Discarding…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/pending', {\n\t\t\t\t\t\tmethod: 'DELETE',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok && r.status !== 204) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tsetStatus('Pending update discarded.', 'text-green-500');\n\t\t\t\t\tawait loadEEPROMConfig();\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.refreshRecoveryBin = async function() {\n\t\t\t\tif (!confirm('Re-download recovery.bin from raspberrypi/rpi-eeprom into the firmware FAT? pieeprom.bin is left alone — U-Boot writes it on each boot and it is the host’s recovery source.')) return;\n\t\t\t\tconst btn = document.getElementById('eeprom-refresh-bin');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Fetching latest recovery.bin…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/recovery/refresh', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('recovery.bin refreshed from upstream.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.upgradeEEPROMVersion = async function() {\n\t\t\t\tif (!confirm('Stage a bootloader version upgrade?\\n\\nThe latest upstream pieeprom-*.bin will be downloaded and written as pieeprom.upd, with your current bootconf transplanted into it. recovery.bin is staged alongside. The live pieeprom.bin is untouched.')) return;\n\t\t\t\tconst btn = document.getElementById('eeprom-upgrade');\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Downloading latest bootloader and staging…');\n\t\t\t\ttry {\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom/upgrade', {\n\t\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\teditor().value = data.raw || '';\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('Bootloader upgrade staged as pieeprom.upd. rpi-eeprom-update will flash on the next boot.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\twindow.refreshEEPROMPreview = function() {\n\t\t\t\trenderPreview(parseClient(editor().value));\n\t\t\t};\n\n\t\t\twindow.saveEEPROMConfig = async function() {\n\t\t\t\tconst btn = saveBtn();\n\t\t\t\tconst content = editor().value;\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tsetStatus('Staging update…');\n\t\t\t\ttry {\n\t\t\t\t\t// The server mutates the live pieeprom.bin U-Boot wrote on\n\t\t\t\t\t// the last host boot. If pieeprom.bin isn't on the FAT\n\t\t\t\t\t// yet the server returns an error — reboot the host so\n\t\t\t\t\t// U-Boot writes one.\n\t\t\t\t\tconst r = await fetch('/api/firmware/eeprom', {\n\t\t\t\t\t\tmethod: 'PUT',\n\t\t\t\t\t\theaders: getAuthHeaders(),\n\t\t\t\t\t\tbody: JSON.stringify({ content }),\n\t\t\t\t\t});\n\t\t\t\t\tif (!r.ok) {\n\t\t\t\t\t\tconst err = await r.json().catch(() => ({}));\n\t\t\t\t\t\tsetStatus('Error: ' + (err.error || r.statusText), 'text-destructive');\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst data = await r.json();\n\t\t\t\t\tbuildCatalogIndex(data);\n\t\t\t\t\trenderPreview(data);\n\t\t\t\t\tapplyPendingChrome(data);\n\t\t\t\t\tsetStatus('Staged as pieeprom.upd. rpi-eeprom-update will flash on the next boot.', 'text-green-500');\n\t\t\t\t} catch(e) {\n\t\t\t\t\tsetStatus('Error: ' + e.message, 'text-destructive');\n\t\t\t\t} finally {\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t}\n\t\t\t};\n\n\t\t\t// Live re-parse as user edits (debounced).\n\t\t\tlet parseTimer = null;\n\t\t\tdocument.addEventListener('input', (e) => {\n\t\t\t\tif (e.target && e.target.id === 'eeprom-editor') {\n\t\t\t\t\tclearTimeout(parseTimer);\n\t\t\t\t\tparseTimer = setTimeout(refreshEEPROMPreview, 250);\n\t\t\t\t}\n\t\t\t});\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

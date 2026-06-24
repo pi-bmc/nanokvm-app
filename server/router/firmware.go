@@ -76,9 +76,6 @@ func firmwareRouter(r *gin.Engine) {
 			}
 			content = string(raw)
 		}
-		// Use the request context so a slow upstream download is bounded
-		// by the client's wait. SetEEPROMConfig will lazily fetch
-		// pieeprom.bin if missing, which can take several seconds.
 		summary, err := ctrl.SetEEPROMConfig(c.Request.Context(), content)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
