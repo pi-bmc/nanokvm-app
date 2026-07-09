@@ -5,9 +5,12 @@
 // When the power-LED GPIO (GPIOPowerLED) is configured and readable, the
 // controller operates in button-press mode:
 //   - Power state is read from the LED pin (1 = on, 0 = off).
-//   - The power-button GPIO (GPIOPower) is normally held HIGH (not pressed).
-//   - A press is simulated by pulling the pin LOW for a duration, then
-//     releasing back to HIGH.
+//   - The power-button GPIO (GPIOPower) is driven open-drain, matching a real
+//     momentary button: the host holds it HIGH via an external pull-up, and a
+//     press shorts it to ground. Releasing leaves the line high-impedance so the
+//     host restores HIGH — the BMC never actively drives it high.
+//   - A press is simulated by pulling the pin to ground (HIGH→LOW) for a
+//     duration, then releasing (float back to HIGH).
 //   - Short press (~300 ms): power-on or graceful/soft shutdown.
 //   - Long press  (≥5 s):   forced hard shutdown (ATX-style hold).
 //
@@ -264,21 +267,28 @@ func (c *Controller) buttonPress(duration time.Duration) error {
 		return fmt.Errorf("GPIOPower not configured")
 	}
 
-	// Guarantee starting state is released (high).
-	if err := c.writeOutput(pin, 1); err != nil {
+	line, err := c.buttonLine(pin)
+	if err != nil {
+		return err
+	}
+
+	// Guarantee starting state is released (high-impedance, host holds HIGH).
+	if err := line.SetValue(1); err != nil {
 		return fmt.Errorf("pre-press release: %w", err)
 	}
 
-	// Pull low — button pressed.
-	if err := c.writeOutput(pin, 0); err != nil {
+	// Pull to ground — button pressed (open-drain actively drives LOW).
+	if err := line.SetValue(0); err != nil {
 		return fmt.Errorf("press down: %w", err)
 	}
+	log.Debugf("power: gpio %s pressed (pulled to ground)", pin)
 	time.Sleep(duration)
 
-	// Restore high — button released.
-	if err := c.writeOutput(pin, 1); err != nil {
+	// Release — float back to HIGH (open-drain high-impedance).
+	if err := line.SetValue(1); err != nil {
 		return fmt.Errorf("press release: %w", err)
 	}
+	log.Debugf("power: gpio %s released (floating high)", pin)
 
 	time.Sleep(postPressDelay)
 	return nil
@@ -350,6 +360,31 @@ func (c *Controller) outputLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
 	if err := l.Reconfigure(gpiocdev.AsOutput(cur)); err != nil {
 		_ = l.Close()
 		return nil, fmt.Errorf("reconfigure %s as output: %w", pin, err)
+	}
+	c.lines[pin] = l
+	return l, nil
+}
+
+// buttonLine returns a cached open-drain request for the power-button pin.
+//
+// A momentary power button is active-low: the host holds it HIGH through an
+// external pull-up, and a press shorts it to ground. Open-drain drive reproduces
+// this exactly — value 0 pulls the line to ground (pressed); value 1 leaves it
+// high-impedance (released) so the host pull-up restores HIGH. The BMC never
+// actively sources HIGH, so it can't contend with the host's button circuit.
+// gpiolib emulates open-drain on chips without native support, so this works
+// regardless of the SoC. The initial value is released (high-impedance), which
+// cannot disturb the host, so no glitch-free sampling is needed here.
+func (c *Controller) buttonLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
+	if l, ok := c.lines[pin]; ok {
+		return l, nil
+	}
+	l, err := gpiocdev.RequestLine(pin.Chip, pin.Line,
+		gpiocdev.AsOutput(1),
+		gpiocdev.AsOpenDrain,
+		gpiocdev.WithConsumer(gpioConsumer))
+	if err != nil {
+		return nil, fmt.Errorf("request %s as open-drain output: %w", pin, err)
 	}
 	c.lines[pin] = l
 	return l, nil
