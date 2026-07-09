@@ -56,6 +56,41 @@ func (c *Controller) ReadFileFromImage(name string) ([]byte, error) {
 	return data, err
 }
 
+// WriteReaderToImage streams r into the named file inside the FAT image without
+// buffering the whole payload in memory (unlike WriteFileToImage). Returns the
+// number of bytes written.
+func (c *Controller) WriteReaderToImage(name string, r io.Reader) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	defer c.invalidateReaderCacheLocked()
+
+	var written int64
+	err := c.withMount(func() error {
+		path, err := c.imagePathFor(name)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("mkdir parent: %w", err)
+		}
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+		if err != nil {
+			return fmt.Errorf("open %s: %w", path, err)
+		}
+		written, err = io.Copy(f, r)
+		closeErr := f.Close()
+		if err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close %s: %w", path, closeErr)
+		}
+		log.Infof("firmware: wrote %d bytes → %s", written, path)
+		return nil
+	})
+	return written, err
+}
+
 // WriteFileToImage writes data to a named file in the mounted image.
 func (c *Controller) WriteFileToImage(name string, data []byte) error {
 	c.mu.Lock()

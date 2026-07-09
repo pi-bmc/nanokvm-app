@@ -18,6 +18,7 @@ import (
 	"github.com/BMCPi/NanoKVM/server/service/firmware"
 	"github.com/BMCPi/NanoKVM/server/service/ipmi"
 	"github.com/BMCPi/NanoKVM/server/telemetry"
+	"github.com/BMCPi/NanoKVM/server/utils"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,10 @@ func initialize() {
 	telemetry.Version = version
 
 	logger.Init()
+
+	// Apply a soft heap limit so the GC pushes back before the process exhausts
+	// memory on this constrained device (no-op if GOMEMLIMIT is set in the env).
+	utils.InitGoMemLimit()
 
 	// Initialize OpenTelemetry + Prometheus (no-op when disabled in config).
 	if err := telemetry.Init(context.Background()); err != nil {

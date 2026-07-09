@@ -99,6 +99,17 @@ func (sol *solState) stop() {
 	log.Info("SOL: session deactivated")
 }
 
+// stopIfSession deactivates SOL only if it is bound to sess. Used when a session
+// is closed or reaped so an abandoned console cannot pin the serial broker open.
+func (sol *solState) stopIfSession(sess *session) {
+	sol.mu.Lock()
+	bound := sol.active && sol.sess == sess
+	sol.mu.Unlock()
+	if bound {
+		sol.stop()
+	}
+}
+
 // sendData sends SOL payload data to the remote console.
 func (sol *solState) sendData(data []byte) {
 	sol.mu.Lock()

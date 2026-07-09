@@ -16,6 +16,13 @@ import (
 	"github.com/BMCPi/NanoKVM/server/service/firmware"
 )
 
+// Upload body caps. Uploads are streamed to the image (constant memory), so
+// these bound the on-image/disk size against abuse rather than RAM.
+const (
+	maxFileUploadBytes   = 128 << 20 // 128 MiB — boot-partition files
+	maxEEPROMConfigBytes = 1 << 20   // 1 MiB — bootconf text is tiny
+)
+
 func firmwareRouter(r *gin.Engine) {
 	ctrl := firmware.GetController()
 
@@ -69,7 +76,7 @@ func firmwareRouter(r *gin.Engine) {
 			}
 			content = body.Content
 		} else {
-			raw, err := io.ReadAll(c.Request.Body)
+			raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxEEPROMConfigBytes))
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -231,7 +238,10 @@ func firmwareRouter(r *gin.Engine) {
 	api.PUT("/file/:name", func(c *gin.Context) {
 		name := filepath.Base(c.Param("name"))
 
-		var data []byte
+		// Stream the upload straight into the image so memory stays flat
+		// regardless of file size (see firmware.WriteReaderToImage). The body is
+		// capped to guard the image/disk, not RAM.
+		var src io.Reader
 		ct := c.ContentType()
 		if ct == "multipart/form-data" {
 			fh, err := c.FormFile("file")
@@ -245,26 +255,18 @@ func firmwareRouter(r *gin.Engine) {
 				return
 			}
 			defer f.Close()
-			data, err = io.ReadAll(f)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			src = io.LimitReader(f, maxFileUploadBytes)
 		} else {
-			var err error
-			data, err = io.ReadAll(c.Request.Body)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
+			src = http.MaxBytesReader(c.Writer, c.Request.Body, maxFileUploadBytes)
 		}
 
-		if err := ctrl.WriteFileToImage(name, data); err != nil {
+		written, err := ctrl.WriteReaderToImage(name, src)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"file": name, "bytes": len(data)})
+		c.JSON(http.StatusOK, gin.H{"file": name, "bytes": written})
 	})
 
 	// DELETE /api/firmware/file/:name — remove a file from the FAT image.

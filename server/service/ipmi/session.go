@@ -9,11 +9,25 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/BMCPi/NanoKVM/server/service/serial"
 	"github.com/BMCPi/NanoKVM/server/telemetry"
+)
+
+// Session lifecycle bounds. RMCP+ Open Session Requests create a session before
+// authentication, so an unauthenticated peer (e.g. a UDP scanner hammering port
+// 623) could otherwise grow the session map without bound. maxSessions caps
+// concurrent sessions and the reaper drops sessions idle longer than
+// sessionIdleTimeout. 60s matches the conventional IPMI session timeout: live
+// consoles emit keepalives, while an abandoned one falls silent and is reaped
+// (which also releases any SOL hold on the serial broker).
+const (
+	maxSessions         = 64
+	sessionIdleTimeout  = 60 * time.Second
+	sessionReapInterval = 20 * time.Second
 )
 
 // sessionState tracks RMCP+ authentication progress.
@@ -45,6 +59,11 @@ type session struct {
 	outSeq           uint32
 	addr             *net.UDPAddr
 	server           *Server
+
+	// lastActivity is the UnixNano timestamp of the most recent packet for this
+	// session. Refreshed on every lookup (get) and used by the reaper. Atomic so
+	// it can be touched from packet-handler goroutines without the manager lock.
+	lastActivity atomic.Int64
 }
 
 // sessionManager tracks all active sessions.
@@ -61,6 +80,9 @@ func newSessionManager() *sessionManager {
 	}
 }
 
+// newSession creates and registers a session. It returns nil when the
+// concurrent-session cap is reached, so a flood of Open Session Requests cannot
+// grow memory without bound; callers must handle a nil result.
 func (sm *sessionManager) newSession() *session {
 	id := atomic.AddUint32(&sessionIDCounter, 1)
 	sess := &session{
@@ -68,36 +90,82 @@ func (sm *sessionManager) newSession() *session {
 		bmcSessionID: id,
 		password:     []byte(defaultPassword),
 	}
+	sess.lastActivity.Store(time.Now().UnixNano())
+
 	sm.mu.Lock()
+	if len(sm.sessions) >= maxSessions {
+		sm.mu.Unlock()
+		log.Warnf("IPMI: session cap (%d) reached, rejecting new session", maxSessions)
+		return nil
+	}
 	sm.sessions[id] = sess
 	sm.mu.Unlock()
+
 	telemetry.IPMISessionOpened(context.Background())
 	return sess
 }
 
 func (sm *sessionManager) get(id uint32) *session {
 	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.sessions[id]
+	sess := sm.sessions[id]
+	sm.mu.RUnlock()
+	if sess != nil {
+		sess.lastActivity.Store(time.Now().UnixNano())
+	}
+	return sess
 }
 
 func (sm *sessionManager) remove(id uint32) {
 	sm.mu.Lock()
-	_, existed := sm.sessions[id]
+	sess, existed := sm.sessions[id]
 	delete(sm.sessions, id)
 	sm.mu.Unlock()
 	if existed {
-		telemetry.IPMISessionClosed(context.Background())
+		sm.cleanupSession(sess)
+	}
+}
+
+// cleanupSession releases resources tied to a removed session: any SOL hold on
+// the shared serial broker, and the active-session telemetry gauge. Runs outside
+// sm.mu so broker teardown never blocks the manager lock.
+func (sm *sessionManager) cleanupSession(sess *session) {
+	solSession.stopIfSession(sess)
+	telemetry.IPMISessionClosed(context.Background())
+}
+
+// reap drops sessions idle longer than idle. Called periodically by the server.
+func (sm *sessionManager) reap(idle time.Duration) {
+	cutoff := time.Now().Add(-idle).UnixNano()
+
+	var expired []*session
+	sm.mu.Lock()
+	for id, sess := range sm.sessions {
+		if sess.lastActivity.Load() < cutoff {
+			delete(sm.sessions, id)
+			expired = append(expired, sess)
+		}
+	}
+	sm.mu.Unlock()
+
+	for _, sess := range expired {
+		log.Debugf("IPMI: reaping idle session 0x%08x", sess.bmcSessionID)
+		sm.cleanupSession(sess)
 	}
 }
 
 func (sm *sessionManager) closeAll() {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	for id := range sm.sessions {
+	expired := make([]*session, 0, len(sm.sessions))
+	for id, sess := range sm.sessions {
+		expired = append(expired, sess)
 		delete(sm.sessions, id)
 	}
+	sm.mu.Unlock()
+
 	solSession.stop()
+	for range expired {
+		telemetry.IPMISessionClosed(context.Background())
+	}
 }
 
 // handleIPMI15 processes an IPMI v1.5 unauthenticated message (pre-session).
@@ -229,6 +297,14 @@ func (sm *sessionManager) handleOpenSessionReq(data []byte, addr *net.UDPAddr, s
 	confidAlgo := data[28] // confidentiality payload algorithm
 
 	sess := sm.newSession()
+	if sess == nil {
+		// Session cap reached — reply with "insufficient resources for session".
+		resp := make([]byte, 8)
+		resp[0] = msgTag
+		resp[1] = 0x01 // status: insufficient resources to create a session
+		binary.LittleEndian.PutUint32(resp[4:8], consoleSessionID)
+		return wrapRMCP(rmcpClassIPMI, wrapRMCPPlus(payloadTypeOpenSessionResp, 0, 0, resp))
+	}
 	sess.consoleSessionID = consoleSessionID
 	sess.authAlgo = authAlgo
 	sess.integAlgo = integAlgo

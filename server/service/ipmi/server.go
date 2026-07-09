@@ -6,10 +6,18 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/BMCPi/NanoKVM/server/telemetry"
 	log "github.com/sirupsen/logrus"
 )
+
+// maxConcurrentHandlers bounds the number of in-flight packet handlers. Each
+// inbound datagram is handled in its own goroutine; without a cap a UDP flood
+// would spawn unbounded goroutines and allocations. When the cap is reached the
+// listener stops reading (back-pressure), so excess datagrams are dropped by the
+// kernel socket buffer rather than buffered in the process.
+const maxConcurrentHandlers = 64
 
 // Server handles IPMI over LAN on a UDP socket.
 type Server struct {
@@ -17,6 +25,7 @@ type Server struct {
 	sessions *sessionManager
 	stop     chan struct{}
 	wg       sync.WaitGroup
+	sem      chan struct{}
 }
 
 // Start creates and starts the IPMI UDP server on the given port.
@@ -35,22 +44,42 @@ func Start(port int) (*Server, error) {
 		conn:     conn,
 		sessions: newSessionManager(),
 		stop:     make(chan struct{}),
+		sem:      make(chan struct{}, maxConcurrentHandlers),
 	}
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.listen()
+	go s.reapLoop()
 
 	log.Infof("IPMI server started on port %d", port)
 	return s, nil
 }
 
-// Stop gracefully shuts down the IPMI server.
+// Stop gracefully shuts down the IPMI server, waiting for the listener, the
+// reaper, and any in-flight packet handlers to finish before returning.
 func (s *Server) Stop() {
 	close(s.stop)
 	_ = s.conn.Close()
 	s.wg.Wait()
 	s.sessions.closeAll()
 	log.Info("IPMI server stopped")
+}
+
+// reapLoop periodically drops idle sessions until the server stops.
+func (s *Server) reapLoop() {
+	defer s.wg.Done()
+
+	t := time.NewTicker(sessionReapInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-s.stop:
+			return
+		case <-t.C:
+			s.sessions.reap(sessionIdleTimeout)
+		}
+	}
 }
 
 func (s *Server) listen() {
@@ -83,7 +112,22 @@ func (s *Server) listen() {
 		copy(pkt, buf[:n])
 
 		telemetry.IPMIPacketReceived(context.Background())
-		go s.handlePacket(pkt, addr)
+
+		// Acquire a handler slot, or bail out if the server is stopping. When all
+		// slots are busy this blocks, pausing reads so a flood is dropped by the
+		// kernel socket buffer instead of spawning unbounded goroutines.
+		select {
+		case s.sem <- struct{}{}:
+		case <-s.stop:
+			return
+		}
+
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			defer func() { <-s.sem }()
+			s.handlePacket(pkt, addr)
+		}()
 	}
 }
 
