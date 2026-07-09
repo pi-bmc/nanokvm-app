@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 type Config struct {
 	Proto          string   `yaml:"proto"`
 	Port           Port     `yaml:"port"`
@@ -96,12 +98,33 @@ type Security struct {
 	LoginMaxFailures     int `yaml:"loginMaxFailures"`
 }
 
+// GPIOPin identifies a GPIO line via the character-device (CONFIG_GPIO_CDEV)
+// interface: a gpiochip plus the line's offset within that chip. This replaces
+// the deprecated sysfs numbering (/sys/class/gpio/gpioN/value, CONFIG_GPIO_SYSFS).
+//
+// Chip may be a bare name ("gpiochip0") or a device path ("/dev/gpiochip0").
+type GPIOPin struct {
+	Chip string
+	Line int
+}
+
+// IsZero reports whether the pin is unset (no chip configured).
+func (p GPIOPin) IsZero() bool { return p.Chip == "" }
+
+// String renders the pin as chip:line for logs and errors.
+func (p GPIOPin) String() string {
+	if p.IsZero() {
+		return "<unset>"
+	}
+	return fmt.Sprintf("%s:%d", p.Chip, p.Line)
+}
+
 type Hardware struct {
 	Version      HWVersion `yaml:"-"`
-	GPIOReset    string    `yaml:"-"`
-	GPIOPower    string    `yaml:"-"`
-	GPIOPowerLED string    `yaml:"-"`
-	GPIOHDDLed   string    `yaml:"-"`
+	GPIOReset    GPIOPin   `yaml:"-"`
+	GPIOPower    GPIOPin   `yaml:"-"`
+	GPIOPowerLED GPIOPin   `yaml:"-"`
+	GPIOHDDLed   GPIOPin   `yaml:"-"`
 }
 
 // Power holds power-control configuration.

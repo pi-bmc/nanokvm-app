@@ -25,16 +25,18 @@ package power
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/warthog618/go-gpiocdev"
 
 	"github.com/BMCPi/NanoKVM/server/config"
 	"github.com/BMCPi/NanoKVM/server/telemetry"
 )
+
+// gpioConsumer labels the process holding the GPIO lines (shown in gpioinfo).
+const gpioConsumer = "nanokvm-power"
 
 const (
 	// shortPressDuration is the hold time for power-on and graceful shutdown.
@@ -56,8 +58,18 @@ const (
 
 // Controller manages system power via GPIO. All public methods are serialized
 // via a mutex to prevent concurrent GPIO sequences.
+//
+// GPIO lines are accessed through the character-device interface
+// (CONFIG_GPIO_CDEV). Each line is requested once, lazily, and the request is
+// held open for the process lifetime (lines map). Holding the request open is
+// what keeps an output line driving its level after a call returns — closing it
+// would release the line and drop the drive, which matters for legacy
+// direct-drive power-off (pin must stay LOW). The kernel reclaims the lines when
+// the process exits. Access to lines is serialized by mu together with the rest
+// of the controller.
 type Controller struct {
-	mu sync.Mutex
+	mu    sync.Mutex
+	lines map[config.GPIOPin]*gpiocdev.Line
 }
 
 var (
@@ -68,7 +80,9 @@ var (
 // GetController returns the singleton power controller.
 func GetController() *Controller {
 	once.Do(func() {
-		instance = &Controller{}
+		instance = &Controller{
+			lines: make(map[config.GPIOPin]*gpiocdev.Line),
+		}
 	})
 	return instance
 }
@@ -221,17 +235,20 @@ func (c *Controller) readState() (bool, error) {
 	hw := config.GetInstance().Hardware
 
 	if !isLegacy() {
-		if hw.GPIOPowerLED == "" {
+		if hw.GPIOPowerLED.IsZero() {
 			return false, fmt.Errorf("GPIOPowerLED not configured (required for button-press mode)")
 		}
-		v, err := readGPIO(hw.GPIOPowerLED)
+		// The LED pin is read-only input.
+		v, err := c.readInput(hw.GPIOPowerLED)
 		if err != nil {
 			return false, fmt.Errorf("read power-LED pin: %w", err)
 		}
 		return v == 1, nil
 	}
 
-	v, err := readGPIO(hw.GPIOPower)
+	// Legacy mode drives the power pin as output; reading it back reports the
+	// level we last drove.
+	v, err := c.readOutput(hw.GPIOPower)
 	if err != nil {
 		return false, fmt.Errorf("read power pin: %w", err)
 	}
@@ -242,24 +259,24 @@ func (c *Controller) readState() (bool, error) {
 // for duration, then restores HIGH. The pin is always left at 1 (released).
 // Caller must hold c.mu.
 func (c *Controller) buttonPress(duration time.Duration) error {
-	path := config.GetInstance().Hardware.GPIOPower
-	if path == "" {
+	pin := config.GetInstance().Hardware.GPIOPower
+	if pin.IsZero() {
 		return fmt.Errorf("GPIOPower not configured")
 	}
 
 	// Guarantee starting state is released (high).
-	if err := writeGPIO(path, 1); err != nil {
+	if err := c.writeOutput(pin, 1); err != nil {
 		return fmt.Errorf("pre-press release: %w", err)
 	}
 
 	// Pull low — button pressed.
-	if err := writeGPIO(path, 0); err != nil {
+	if err := c.writeOutput(pin, 0); err != nil {
 		return fmt.Errorf("press down: %w", err)
 	}
 	time.Sleep(duration)
 
 	// Restore high — button released.
-	if err := writeGPIO(path, 1); err != nil {
+	if err := c.writeOutput(pin, 1); err != nil {
 		return fmt.Errorf("press release: %w", err)
 	}
 
@@ -287,9 +304,9 @@ func (c *Controller) waitForOff() error {
 // power pin is wired directly to the power supply enable.
 // Caller must hold c.mu.
 func (c *Controller) legacyBootSequence() error {
-	path := config.GetInstance().Hardware.GPIOPower
+	pin := config.GetInstance().Hardware.GPIOPower
 	for _, v := range []int{1, 0, 1} {
-		if err := writeGPIO(path, v); err != nil {
+		if err := c.writeOutput(pin, v); err != nil {
 			return fmt.Errorf("boot sequence (write %d): %w", v, err)
 		}
 		time.Sleep(toggleDelay)
@@ -300,34 +317,89 @@ func (c *Controller) legacyBootSequence() error {
 // legacyWritePin sets the power pin directly (0 = off, 1 = on).
 // Caller must hold c.mu.
 func (c *Controller) legacyWritePin(val int) error {
-	path := config.GetInstance().Hardware.GPIOPower
-	if err := writeGPIO(path, val); err != nil {
+	pin := config.GetInstance().Hardware.GPIOPower
+	if err := c.writeOutput(pin, val); err != nil {
 		return fmt.Errorf("write power pin %d: %w", val, err)
 	}
 	return nil
 }
 
-// ── Low-level sysfs GPIO access ───────────────────────────────────────────────
+// ── Low-level GPIO access (character device, CONFIG_GPIO_CDEV) ─────────────────
+//
+// Lines are requested lazily and cached in c.lines; the request is held open so
+// output levels persist after a call returns. All helpers require c.mu held,
+// which the public API guarantees.
 
-func readGPIO(path string) (int, error) {
-	raw, err := os.ReadFile(path)
+// outputLine returns a cached request for pin configured as output. On first
+// use the line is sampled as input and then reconfigured to output at that same
+// level, so acquiring the line does not glitch the current pin state (important
+// so starting the daemon never toggles power).
+func (c *Controller) outputLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
+	if l, ok := c.lines[pin]; ok {
+		return l, nil
+	}
+	l, err := gpiocdev.RequestLine(pin.Chip, pin.Line, gpiocdev.AsInput, gpiocdev.WithConsumer(gpioConsumer))
+	if err != nil {
+		return nil, fmt.Errorf("request %s as input: %w", pin, err)
+	}
+	cur, err := l.Value()
+	if err != nil {
+		_ = l.Close()
+		return nil, fmt.Errorf("sample %s: %w", pin, err)
+	}
+	if err := l.Reconfigure(gpiocdev.AsOutput(cur)); err != nil {
+		_ = l.Close()
+		return nil, fmt.Errorf("reconfigure %s as output: %w", pin, err)
+	}
+	c.lines[pin] = l
+	return l, nil
+}
+
+// inputLine returns a cached request for pin configured as input.
+func (c *Controller) inputLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
+	if l, ok := c.lines[pin]; ok {
+		return l, nil
+	}
+	l, err := gpiocdev.RequestLine(pin.Chip, pin.Line, gpiocdev.AsInput, gpiocdev.WithConsumer(gpioConsumer))
+	if err != nil {
+		return nil, fmt.Errorf("request %s as input: %w", pin, err)
+	}
+	c.lines[pin] = l
+	return l, nil
+}
+
+// readInput reads the current level of an input pin (0 or 1).
+func (c *Controller) readInput(pin config.GPIOPin) (int, error) {
+	l, err := c.inputLine(pin)
 	if err != nil {
 		return 0, err
 	}
-	if strings.TrimSpace(string(raw)) == "1" {
-		return 1, nil
-	}
-	return 0, nil
+	return l.Value()
 }
 
-func writeGPIO(path string, val int) error {
-	v := "0"
+// readOutput reads back the level currently driven on an output pin (0 or 1).
+func (c *Controller) readOutput(pin config.GPIOPin) (int, error) {
+	l, err := c.outputLine(pin)
+	if err != nil {
+		return 0, err
+	}
+	return l.Value()
+}
+
+// writeOutput drives an output pin to val (any non-zero value means high). The
+// held-open line request keeps the level asserted after this returns.
+func (c *Controller) writeOutput(pin config.GPIOPin, val int) error {
+	l, err := c.outputLine(pin)
+	if err != nil {
+		return err
+	}
+	v := 0
 	if val != 0 {
-		v = "1"
+		v = 1
 	}
-	if err := os.WriteFile(path, []byte(v), 0o644); err != nil {
-		return fmt.Errorf("write %s=%s: %w", path, v, err)
+	if err := l.SetValue(v); err != nil {
+		return fmt.Errorf("set %s = %d: %w", pin, v, err)
 	}
-	log.Debugf("power: gpio %s = %s", path, v)
+	log.Debugf("power: gpio %s = %d", pin, v)
 	return nil
 }

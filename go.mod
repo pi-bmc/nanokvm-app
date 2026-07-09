@@ -17,6 +17,7 @@ require (
 	github.com/templui/templui v1.11.2
 	github.com/ulikunitz/xz v0.5.15
 	github.com/unrolled/secure v1.17.0
+	github.com/warthog618/go-gpiocdev v0.9.1
 	github.com/yuin/goldmark v1.8.2
 	go.bug.st/serial v1.6.4
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.68.0
