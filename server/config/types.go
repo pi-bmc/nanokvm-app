@@ -14,6 +14,7 @@ type Config struct {
 	Redfish        Redfish  `yaml:"redfish"`
 	Serial         Serial   `yaml:"serial"`
 	Firmware       Firmware `yaml:"firmware"`
+	EfiVars        EfiVars  `yaml:"efiVars"`
 
 	Power      Power      `yaml:"power"`
 	Telemetry  Telemetry  `yaml:"telemetry"`
@@ -145,4 +146,27 @@ type Firmware struct {
 	OnceEnv       string `yaml:"onceEnv"`       // write: applied once then deleted
 	// MediaDir is the directory where ISO images for virtual media are stored.
 	MediaDir string `yaml:"mediaDir"`
+}
+
+// EfiVars configures access to the UEFI variable store that U-Boot on the
+// host persists in an I2C EEPROM (CONFIG_EFI_VARIABLE_I2C_STORE). The BMC
+// reads and rewrites BootOrder/BootNext there out-of-band.
+type EfiVars struct {
+	// Enabled gates the subsystem; when false Redfish boot overrides fall
+	// back to the U-Boot env files.
+	Enabled bool `yaml:"enabled"`
+	// Path is a file-backed store: the backing file of a kernel
+	// i2c-slave-eeprom device (BMC emulating the EEPROM, e.g.
+	// /sys/bus/i2c/devices/0-1050/slave-eeprom), an at24 sysfs eeprom node,
+	// or a plain file for testing. Takes precedence over I2CBus.
+	Path string `yaml:"path"`
+	// I2CBus selects raw /dev/i2c-N master access when Path is empty.
+	// Set to -1 to disable.
+	I2CBus int `yaml:"i2cBus"`
+	// I2CAddr is the EEPROM chip address (default 0x50).
+	I2CAddr int `yaml:"i2cAddr"`
+	// PageSize is the EEPROM write page size in bytes (default 64, 24c256).
+	PageSize int `yaml:"pageSize"`
+	// StoreSize caps the variable blob size in bytes (default 32768, 24c256).
+	StoreSize int `yaml:"storeSize"`
 }

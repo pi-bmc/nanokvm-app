@@ -643,6 +643,11 @@ components:
             "BootSourceOverrideEnabled@Redfish.AllowableValues":
               type: array
               items: { type: string }
+            # Present when the UEFI variable store (I2C EEPROM) is available:
+            # the EFI boot manager BootOrder as Boot#### references.
+            BootOrder:
+              type: array
+              items: { type: string }
         Actions:
           type: object
           properties:

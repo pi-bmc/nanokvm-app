@@ -43,9 +43,22 @@ stage() {
 
 start() {
     stage || { echo "FAIL"; return 1; }
-    start-stop-daemon -S -b -m -o -p "${PID_FILE}" -O "${LOGFILE}" \
-        -d "${RUN_DIR}" -x "${RUN_DIR}/${DAEMON}" \
-        && echo "OK" || echo "FAIL"
+
+    # Already running? Mirrors -o/--oknodo: succeed if a matching process
+    # is alive (busybox -K -t exits 0 when found).
+    if start-stop-daemon -K -t -q -p "${PID_FILE}" -x "${RUN_DIR}/${DAEMON}"; then
+        echo "OK"
+        return 0
+    fi
+
+    # busybox start-stop-daemon has neither -d/--chdir nor a logfile option,
+    # and its -b forces stdio to /dev/null. Background, chdir into RUN_DIR and
+    # redirect output ourselves so the daemon runs from a writable dir with its
+    # output captured to LOGFILE. exec keeps the subshell PID as the daemon PID.
+    mkdir -p "$(dirname "${LOGFILE}")"
+    ( cd "${RUN_DIR}" && exec "${RUN_DIR}/${DAEMON}" ) >>"${LOGFILE}" 2>&1 &
+    echo $! > "${PID_FILE}"
+    echo "OK"
 }
 
 stop() {

@@ -55,6 +55,14 @@ var defaultConfig = &Config{
 		OnceEnv:       "/data/firmware/files/once.env",
 		MediaDir:      "/data/media",
 	},
+	EfiVars: EfiVars{
+		Enabled:   true,
+		Path:      "",
+		I2CBus:    0,
+		I2CAddr:   0x50,
+		PageSize:  64,
+		StoreSize: 32768,
+	},
 	Power: Power{
 		LegacyMode: false,
 	},
@@ -143,6 +151,20 @@ func checkDefaultValue() {
 	}
 	if instance.Firmware.MediaDir == "" {
 		instance.Firmware.MediaDir = defaultConfig.Firmware.MediaDir
+	}
+
+	// Apply EFI variable store defaults when not present in the config file.
+	if instance.EfiVars.I2CBus == 0 && instance.EfiVars.Path == "" && !instance.EfiVars.Enabled {
+		instance.EfiVars.I2CBus = defaultConfig.EfiVars.I2CBus
+	}
+	if instance.EfiVars.I2CAddr == 0 {
+		instance.EfiVars.I2CAddr = defaultConfig.EfiVars.I2CAddr
+	}
+	if instance.EfiVars.PageSize <= 0 {
+		instance.EfiVars.PageSize = defaultConfig.EfiVars.PageSize
+	}
+	if instance.EfiVars.StoreSize <= 0 {
+		instance.EfiVars.StoreSize = defaultConfig.EfiVars.StoreSize
 	}
 
 	if instance.Telemetry.ServiceName == "" {

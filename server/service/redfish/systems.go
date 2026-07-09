@@ -1,11 +1,13 @@
 package redfish
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/BMCPi/NanoKVM/server/service/efivars"
 	"github.com/BMCPi/NanoKVM/server/service/firmware"
 	"github.com/BMCPi/NanoKVM/server/service/power"
 )
@@ -93,15 +95,9 @@ func (s *Service) PatchSystem(c *gin.Context) {
 		enabled = "Once" // default to once per Redfish convention
 	}
 
-	// Disabled clears both override files regardless of target.
+	// Disabled clears the override regardless of target.
 	if enabled == "Disabled" || target == "None" {
-		fwCtrl := firmware.GetController()
-		if err := fwCtrl.SetBootTarget(""); err != nil {
-			log.Warnf("redfish: clear persistent boot failed: %v", err)
-		}
-		if err := fwCtrl.SetBootTargetOnce(""); err != nil {
-			log.Warnf("redfish: clear once boot failed: %v", err)
-		}
+		clearBootOverride()
 		log.Debugf("redfish boot override cleared")
 		c.JSON(http.StatusOK, buildSystemResource())
 		return
@@ -112,24 +108,93 @@ func (s *Service) PatchSystem(c *gin.Context) {
 		return
 	}
 
-	fwCtrl := firmware.GetController()
-	ubootTargets, ok := firmware.RedfishToUBoot[target]
-	if !ok {
-		ubootTargets = ""
-	}
-
-	var err error
-	if enabled == "Continuous" {
-		err = fwCtrl.SetBootTarget(ubootTargets)
-	} else {
-		err = fwCtrl.SetBootTargetOnce(ubootTargets)
-	}
-	if err != nil {
-		log.Warnf("redfish: firmware env write failed: %v", err)
+	if err := setBootOverride(target, enabled); err != nil {
+		log.Warnf("redfish: boot override write failed: %v", err)
 	}
 
 	log.Debugf("redfish boot override: target=%s enabled=%s", target, enabled)
 	c.JSON(http.StatusOK, buildSystemResource())
+}
+
+// setBootOverride applies a boot source override. When the UEFI variable
+// store (I2C EEPROM) is available it drives the EFI boot manager directly:
+// BootNext for Once, a BootOrder reorder for Continuous. Otherwise it falls
+// back to the legacy U-Boot env files (boot_targets).
+func setBootOverride(target, enabled string) error {
+	if mgr := efivars.GetManager(); mgr.Available() {
+		// BiosSetup has no Boot#### entry to point at; treat as no-op like
+		// the env path (which maps it to an empty boot_targets) does.
+		if target == "BiosSetup" {
+			return nil
+		}
+		return mgr.SetBootSourceOverride(efivars.BootTarget(target), enabled != "Continuous")
+	}
+
+	fwCtrl := firmware.GetController()
+	ubootTargets := firmware.RedfishToUBoot[target]
+	if enabled == "Continuous" {
+		return fwCtrl.SetBootTarget(ubootTargets)
+	}
+	return fwCtrl.SetBootTargetOnce(ubootTargets)
+}
+
+// clearBootOverride removes any pending boot source override.
+func clearBootOverride() {
+	if mgr := efivars.GetManager(); mgr.Available() {
+		if err := mgr.ClearBootSourceOverride(); err != nil {
+			log.Warnf("redfish: clear BootNext failed: %v", err)
+		}
+		return
+	}
+
+	fwCtrl := firmware.GetController()
+	if err := fwCtrl.SetBootTarget(""); err != nil {
+		log.Warnf("redfish: clear persistent boot failed: %v", err)
+	}
+	if err := fwCtrl.SetBootTargetOnce(""); err != nil {
+		log.Warnf("redfish: clear once boot failed: %v", err)
+	}
+}
+
+// readBootOverride reports the current boot source override and, when the
+// UEFI variable store is available, the BootOrder as Boot#### references.
+// Store path: a pending BootNext maps to "Once"; a continuous override is a
+// plain BootOrder reorder and reads back as "Disabled". Env fallback keeps
+// the legacy boot_targets semantics.
+func readBootOverride() (target, enabled string, bootOrder []string) {
+	target, enabled = "None", "Disabled"
+
+	if mgr := efivars.GetManager(); mgr.Available() {
+		if t, e, err := mgr.BootSourceOverride(); err == nil {
+			if t != efivars.TargetUnknown {
+				target = string(t)
+			}
+			enabled = e
+		} else {
+			log.Warnf("redfish: read boot override failed: %v", err)
+		}
+		if order, err := mgr.BootOrder(); err == nil {
+			bootOrder = make([]string, len(order))
+			for i, id := range order {
+				bootOrder[i] = fmt.Sprintf("Boot%04X", id)
+			}
+		}
+		return target, enabled, bootOrder
+	}
+
+	// Legacy env fallback — persistent takes precedence over once.
+	fwCtrl := firmware.GetController()
+	if ubootTargets, err := fwCtrl.GetBootTarget(); err == nil && ubootTargets != "" {
+		if rt, ok := firmware.UBootToRedfish[ubootTargets]; ok {
+			return rt, "Continuous", nil
+		}
+	}
+	if ubootTargets, err := fwCtrl.GetOnceBootTarget(); err == nil && ubootTargets != "" {
+		if rt, ok := firmware.UBootToRedfish[ubootTargets]; ok {
+			return rt, "Once", nil
+		}
+	}
+	return target, enabled, nil
 }
 
 func buildSystemResource() gin.H {
@@ -141,24 +206,24 @@ func buildSystemResource() gin.H {
 		powerState = "On"
 	}
 
-	// Read boot override from firmware env — persistent takes precedence over once.
-	currentTarget := "None"
-	overrideEnabled := "Disabled"
-	fwCtrl := firmware.GetController()
+	currentTarget, overrideEnabled, bootOrder := readBootOverride()
 
-	if ubootTargets, err := fwCtrl.GetBootTarget(); err == nil && ubootTargets != "" {
-		if rt, ok := firmware.UBootToRedfish[ubootTargets]; ok {
-			currentTarget = rt
-			overrideEnabled = "Continuous"
-		}
+	bootInfo := gin.H{
+		"BootSourceOverrideTarget":  currentTarget,
+		"BootSourceOverrideEnabled": overrideEnabled,
+		"BootSourceOverrideTarget@Redfish.AllowableValues": []string{
+			"None", "Pxe", "Hdd", "Cd", "BiosSetup", "UefiHttp",
+		},
+		"BootSourceOverrideEnabled@Redfish.AllowableValues": []string{
+			"Disabled", "Once", "Continuous",
+		},
+		"BootSourceOverrideMode": "UEFI",
+		"BootSourceOverrideMode@Redfish.AllowableValues": []string{
+			"UEFI",
+		},
 	}
-	if overrideEnabled == "Disabled" {
-		if ubootTargets, err := fwCtrl.GetOnceBootTarget(); err == nil && ubootTargets != "" {
-			if rt, ok := firmware.UBootToRedfish[ubootTargets]; ok {
-				currentTarget = rt
-				overrideEnabled = "Once"
-			}
-		}
+	if bootOrder != nil {
+		bootInfo["BootOrder"] = bootOrder
 	}
 
 	// Read inventory from firmware env.
@@ -170,20 +235,7 @@ func buildSystemResource() gin.H {
 		"Name":           "Computer System",
 		"SystemType":     "Physical",
 		"PowerState":     powerState,
-		"Boot": gin.H{
-			"BootSourceOverrideTarget":  currentTarget,
-			"BootSourceOverrideEnabled": overrideEnabled,
-			"BootSourceOverrideTarget@Redfish.AllowableValues": []string{
-				"None", "Pxe", "Hdd", "Cd", "BiosSetup", "UefiHttp",
-			},
-			"BootSourceOverrideEnabled@Redfish.AllowableValues": []string{
-				"Disabled", "Once", "Continuous",
-			},
-			"BootSourceOverrideMode": "UEFI",
-			"BootSourceOverrideMode@Redfish.AllowableValues": []string{
-				"UEFI",
-			},
-		},
+		"Boot":           bootInfo,
 		"Actions": gin.H{
 			"#ComputerSystem.Reset": gin.H{
 				"target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset",
@@ -200,7 +252,7 @@ func buildSystemResource() gin.H {
 		},
 	}
 
-	if inv, err := fwCtrl.GetInventory(); err == nil {
+	if inv, err := firmware.GetController().GetInventory(); err == nil {
 		if v, ok := inv["board_name"]; ok {
 			systemInfo["Model"] = v
 		}
