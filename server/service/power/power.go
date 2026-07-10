@@ -4,7 +4,8 @@
 //
 // When the power-LED GPIO (GPIOPowerLED) is configured and readable, the
 // controller operates in button-press mode:
-//   - Power state is read from the LED pin (1 = on, 0 = off).
+//   - Power state is tracked from edge events on the LED pin (1 = on, 0 = off),
+//     not by polling. See "Edge-driven state" below.
 //   - The power-button GPIO (GPIOPower) is driven open-drain, matching a real
 //     momentary button: the host holds it HIGH via an external pull-up, and a
 //     press shorts it to ground. Releasing leaves the line high-impedance so the
@@ -22,13 +23,28 @@
 //   - Power-on uses a 1→0→1 toggle sequence to trigger boot.
 //   - Power-off / force-off set the pin directly to 0 (immediate cut).
 //
-// All public methods are serialized via a mutex.
+// # Edge-driven state
+//
+// In button-press mode the LED line is requested once with both-edge detection.
+// The kernel delivers an event on every transition; the handler updates a cached
+// atomic and fans the new value out to subscribers registered via Watch. State
+// therefore never touches hardware and never blocks — important because a long
+// power sequence (ForceOff, Reset) holds the controller mutex for many seconds
+// while it waits for the host to go down, and callers polling State would
+// otherwise queue up behind it.
+//
+// Legacy mode has no LED line, so State reads the button pin directly under the
+// mutex and Watch reports ErrNoEdgeEvents.
+//
+// Power *actions* are serialized via a mutex; State and Watch are not.
 package power
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -37,6 +53,11 @@ import (
 	"github.com/BMCPi/NanoKVM/server/config"
 	"github.com/BMCPi/NanoKVM/server/telemetry"
 )
+
+// ErrNoEdgeEvents is returned by Watch when the controller cannot deliver
+// change notifications — currently only in legacy mode, which has no LED line.
+// Callers should fall back to polling State.
+var ErrNoEdgeEvents = errors.New("power: edge events unavailable (legacy mode)")
 
 // gpioConsumer labels the process holding the GPIO lines (shown in gpioinfo).
 const gpioConsumer = "nanokvm-power"
@@ -54,9 +75,13 @@ const (
 	// postPressDelay lets the hardware settle after releasing the button.
 	postPressDelay = 500 * time.Millisecond
 
-	// offPollInterval / offPollTimeout: how often / how long waitForOff polls.
-	offPollInterval = 250 * time.Millisecond
-	offPollTimeout  = 30 * time.Second
+	// offTimeout bounds how long waitForOff blocks for the host to power down.
+	offTimeout = 30 * time.Second
+
+	// ledDebounce filters contact/level noise on the power-LED line. It must
+	// stay well below the blink period of a pulsing standby LED, whose real
+	// transitions we still want to see.
+	ledDebounce = 10 * time.Millisecond
 )
 
 // Controller manages system power via GPIO. All public methods are serialized
@@ -70,9 +95,26 @@ const (
 // direct-drive power-off (pin must stay LOW). The kernel reclaims the lines when
 // the process exits. Access to lines is serialized by mu together with the rest
 // of the controller.
+//
+// The power-LED line is deliberately NOT part of lines: it is held under ledMu
+// with its own lazy request, so reading power state never contends with a power
+// sequence holding mu. Lock order is mu → ledMu; nothing takes them the other
+// way round.
 type Controller struct {
 	mu    sync.Mutex
 	lines map[config.GPIOPin]*gpiocdev.Line
+
+	// ledMu guards ledLine. ledOn is the edge-maintained cache of the LED level
+	// and is read without any lock.
+	ledMu   sync.Mutex
+	ledLine *gpiocdev.Line
+	ledOn   atomic.Bool
+
+	// subsMu guards subs, the set of Watch channels. The gpiocdev event
+	// goroutine publishes into them; it must never block, so sends are
+	// non-blocking with latest-value semantics.
+	subsMu sync.Mutex
+	subs   map[chan bool]struct{}
 }
 
 var (
@@ -85,6 +127,7 @@ func GetController() *Controller {
 	once.Do(func() {
 		instance = &Controller{
 			lines: make(map[config.GPIOPin]*gpiocdev.Line),
+			subs:  make(map[chan bool]struct{}),
 		}
 	})
 	return instance
@@ -93,8 +136,18 @@ func GetController() *Controller {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 // State reports whether the system is powered on.
-// Reads the power-LED GPIO if available; otherwise reads the button pin directly.
+//
+// Button mode: returns the edge-maintained cache — no ioctl, no lock, so it
+// stays responsive while a multi-second power sequence holds mu.
+// Legacy mode:  reads the button pin directly under mu.
 func (c *Controller) State() (bool, error) {
+	if !isLegacy() {
+		if err := c.ensureLEDWatcher(); err != nil {
+			return false, err
+		}
+		return c.ledOn.Load(), nil
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	on, err := c.readState()
@@ -102,6 +155,40 @@ func (c *Controller) State() (bool, error) {
 		telemetry.PowerState(context.Background(), on)
 	}
 	return on, err
+}
+
+// Watch returns a channel that receives the power state on every change, plus a
+// cancel func the caller must invoke to unsubscribe (it closes the channel).
+//
+// The channel has latest-value semantics: a subscriber that falls behind sees
+// the most recent state, never a backlog. It does NOT receive the current state
+// on subscribe — call State for that, before or after Watch (a duplicate is
+// harmless; a missed transition is not).
+//
+// Returns ErrNoEdgeEvents in legacy mode, where the caller must poll State.
+func (c *Controller) Watch() (<-chan bool, func(), error) {
+	if isLegacy() {
+		return nil, nil, ErrNoEdgeEvents
+	}
+	if err := c.ensureLEDWatcher(); err != nil {
+		return nil, nil, err
+	}
+
+	ch := make(chan bool, 1)
+	c.subsMu.Lock()
+	c.subs[ch] = struct{}{}
+	c.subsMu.Unlock()
+
+	var once sync.Once
+	cancel := func() {
+		once.Do(func() {
+			c.subsMu.Lock()
+			delete(c.subs, ch)
+			close(ch)
+			c.subsMu.Unlock()
+		})
+	}
+	return ch, cancel, nil
 }
 
 // PowerOn powers on the system.
@@ -231,31 +318,106 @@ func isLegacy() bool {
 }
 
 // readState returns true if the system is powered on.
-// Button mode: reads the power-LED GPIO.
+// Button mode: returns the edge-maintained LED cache.
 // Legacy mode:  reads the button/power pin directly.
 // Caller must hold c.mu.
 func (c *Controller) readState() (bool, error) {
-	hw := config.GetInstance().Hardware
-
 	if !isLegacy() {
-		if hw.GPIOPowerLED.IsZero() {
-			return false, fmt.Errorf("GPIOPowerLED not configured (required for button-press mode)")
+		if err := c.ensureLEDWatcher(); err != nil {
+			return false, err
 		}
-		// The LED pin is read-only input.
-		v, err := c.readInput(hw.GPIOPowerLED)
-		if err != nil {
-			return false, fmt.Errorf("read power-LED pin: %w", err)
-		}
-		return v == 1, nil
+		return c.ledOn.Load(), nil
 	}
 
 	// Legacy mode drives the power pin as output; reading it back reports the
 	// level we last drove.
-	v, err := c.readOutput(hw.GPIOPower)
+	v, err := c.readOutput(config.GetInstance().Hardware.GPIOPower)
 	if err != nil {
 		return false, fmt.Errorf("read power pin: %w", err)
 	}
 	return v == 1, nil
+}
+
+// ── Power-LED edge watcher ────────────────────────────────────────────────────
+
+// ensureLEDWatcher lazily requests the power-LED line with both-edge detection
+// and seeds ledOn with its current level. Safe to call concurrently and from any
+// lock context (it only takes ledMu). Idempotent once the line is held.
+func (c *Controller) ensureLEDWatcher() error {
+	c.ledMu.Lock()
+	defer c.ledMu.Unlock()
+
+	if c.ledLine != nil {
+		return nil
+	}
+
+	pin := config.GetInstance().Hardware.GPIOPowerLED
+	if pin.IsZero() {
+		return fmt.Errorf("GPIOPowerLED not configured (required for button-press mode)")
+	}
+
+	opts := []gpiocdev.LineReqOption{
+		gpiocdev.AsInput,
+		gpiocdev.WithBothEdges,
+		gpiocdev.WithEventHandler(c.onLEDEvent),
+		gpiocdev.WithConsumer(gpioConsumer),
+	}
+
+	// Hardware debounce needs GPIO uAPI v2. Kernels stuck on v1 reject the
+	// request outright, so retry without it — edge events still work, we just
+	// see the noise.
+	line, err := gpiocdev.RequestLine(pin.Chip, pin.Line, append(opts, gpiocdev.WithDebounce(ledDebounce))...)
+	if err != nil {
+		log.Debugf("power: %s debounce unavailable (%v), retrying without", pin, err)
+		line, err = gpiocdev.RequestLine(pin.Chip, pin.Line, opts...)
+		if err != nil {
+			return fmt.Errorf("watch power-LED pin %s: %w", pin, err)
+		}
+	}
+
+	// Seed from the current level. Any edge that lands between the request and
+	// this read is delivered to the handler, so no transition is lost.
+	v, err := line.Value()
+	if err != nil {
+		_ = line.Close()
+		return fmt.Errorf("read power-LED pin %s: %w", pin, err)
+	}
+
+	c.ledLine = line
+	c.setLED(v == 1)
+	log.Infof("power: watching power-LED %s (initial state: %v)", pin, v == 1)
+	return nil
+}
+
+// onLEDEvent runs on the gpiocdev event goroutine. It must not block.
+func (c *Controller) onLEDEvent(evt gpiocdev.LineEvent) {
+	c.setLED(evt.Type == gpiocdev.LineEventRisingEdge)
+}
+
+// setLED updates the cached level and, on a change, records telemetry and fans
+// the new value out to subscribers.
+func (c *Controller) setLED(on bool) {
+	if c.ledOn.Swap(on) == on {
+		return
+	}
+	log.Debugf("power: power-LED changed to %v", on)
+	telemetry.PowerState(context.Background(), on)
+
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
+	for ch := range c.subs {
+		// Latest-value: drop any stale queued value, then enqueue this one.
+		// Both sends are non-blocking, so a wedged subscriber can't stall the
+		// event goroutine.
+		select {
+		case <-ch:
+		default:
+		}
+		select {
+		case ch <- on:
+		default:
+		}
+	}
 }
 
 // buttonPress simulates a button press: ensures the pin is HIGH, pulls it LOW
@@ -294,18 +456,38 @@ func (c *Controller) buttonPress(duration time.Duration) error {
 	return nil
 }
 
-// waitForOff polls until the power LED reports off, or until offPollTimeout.
-// Caller must hold c.mu.
+// waitForOff blocks until the power LED reports off, or until offTimeout.
+// Caller must hold c.mu — State and Watch do not take it, so concurrent readers
+// stay responsive for the whole wait.
 func (c *Controller) waitForOff() error {
-	deadline := time.Now().Add(offPollTimeout)
-	for time.Now().Before(deadline) {
-		on, err := c.readState()
-		if err == nil && !on {
-			return nil
-		}
-		time.Sleep(offPollInterval)
+	ch, cancel, err := c.Watch()
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("timed out after %s waiting for power off", offPollTimeout)
+	defer cancel()
+
+	// Subscribe first, then check: an edge that lands in between is queued on
+	// ch rather than missed.
+	if !c.ledOn.Load() {
+		return nil
+	}
+
+	timeout := time.NewTimer(offTimeout)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case on, ok := <-ch:
+			if !ok {
+				return fmt.Errorf("power-LED watch closed while waiting for power off")
+			}
+			if !on {
+				return nil
+			}
+		case <-timeout.C:
+			return fmt.Errorf("timed out after %s waiting for power off", offTimeout)
+		}
+	}
 }
 
 // ── Legacy helpers ────────────────────────────────────────────────────────────
@@ -373,8 +555,10 @@ func (c *Controller) outputLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
 // high-impedance (released) so the host pull-up restores HIGH. The BMC never
 // actively sources HIGH, so it can't contend with the host's button circuit.
 // gpiolib emulates open-drain on chips without native support, so this works
-// regardless of the SoC. The initial value is released (high-impedance), which
-// cannot disturb the host, so no glitch-free sampling is needed here.
+// regardless of the SoC. The internal pull-up guarantees the released line
+// settles HIGH even if the host's external pull-up is weak or absent. The
+// initial value is released (high-impedance), which cannot disturb the host, so
+// no glitch-free sampling is needed here.
 func (c *Controller) buttonLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
 	if l, ok := c.lines[pin]; ok {
 		return l, nil
@@ -382,34 +566,13 @@ func (c *Controller) buttonLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
 	l, err := gpiocdev.RequestLine(pin.Chip, pin.Line,
 		gpiocdev.AsOutput(1),
 		gpiocdev.AsOpenDrain,
+		gpiocdev.WithPullUp,
 		gpiocdev.WithConsumer(gpioConsumer))
 	if err != nil {
 		return nil, fmt.Errorf("request %s as open-drain output: %w", pin, err)
 	}
 	c.lines[pin] = l
 	return l, nil
-}
-
-// inputLine returns a cached request for pin configured as input.
-func (c *Controller) inputLine(pin config.GPIOPin) (*gpiocdev.Line, error) {
-	if l, ok := c.lines[pin]; ok {
-		return l, nil
-	}
-	l, err := gpiocdev.RequestLine(pin.Chip, pin.Line, gpiocdev.AsInput, gpiocdev.WithConsumer(gpioConsumer))
-	if err != nil {
-		return nil, fmt.Errorf("request %s as input: %w", pin, err)
-	}
-	c.lines[pin] = l
-	return l, nil
-}
-
-// readInput reads the current level of an input pin (0 or 1).
-func (c *Controller) readInput(pin config.GPIOPin) (int, error) {
-	l, err := c.inputLine(pin)
-	if err != nil {
-		return 0, err
-	}
-	return l.Value()
 }
 
 // readOutput reads back the level currently driven on an output pin (0 or 1).

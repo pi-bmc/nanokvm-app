@@ -18,6 +18,7 @@ require (
 	github.com/ulikunitz/xz v0.5.15
 	github.com/unrolled/secure v1.17.0
 	github.com/warthog618/go-gpiocdev v0.9.1
+	github.com/warthog618/go-gpiosim v0.1.1
 	github.com/yuin/goldmark v1.8.2
 	go.bug.st/serial v1.6.4
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.68.0
@@ -76,6 +77,7 @@ require (
 	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/xattr v0.4.12 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect

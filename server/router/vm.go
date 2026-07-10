@@ -15,8 +15,9 @@ func vmRouter(r *gin.Engine) {
 	api.GET("/vm/info", service.GetInfo)         // get device information
 	api.GET("/vm/hardware", service.GetHardware) // get hardware version
 
-	api.POST("/vm/gpio", service.SetGpio) // update gpio
-	api.GET("/vm/gpio", service.GetGpio)  // get gpio
+	api.POST("/vm/gpio", service.SetGpio)          // update gpio
+	api.GET("/vm/gpio", service.GetGpio)           // get gpio
+	api.GET("/vm/gpio/events", service.StreamGpio) // stream power state (SSE)
 
 	api.GET("/vm/terminal", service.Terminal) // web terminal
 

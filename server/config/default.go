@@ -56,9 +56,15 @@ var defaultConfig = &Config{
 		MediaDir:      "/data/media",
 	},
 	EfiVars: EfiVars{
-		Enabled:   true,
-		Path:      "",
-		I2CBus:    0,
+		Enabled: true,
+		// Read the store from the BMC's own i2c-slave-eeprom backing file. The
+		// host (Raspberry Pi U-Boot, CONFIG_EFI_VARIABLE_I2C_STORE) writes the
+		// variable blob into this EEPROM over I2C; the BMC reads/writes the same
+		// bytes out-of-band through the slave device's backing file. This is
+		// always safe — unlike raw /dev/i2c master access to 0x50, which would
+		// address the BMC's *own* slave and cannot read the store.
+		Path:      "/sys/bus/i2c/devices/0-1050/slave-eeprom",
+		I2CBus:    -1, // disable the raw-master fallback
 		I2CAddr:   0x50,
 		PageSize:  64,
 		StoreSize: 32768,
@@ -154,7 +160,12 @@ func checkDefaultValue() {
 	}
 
 	// Apply EFI variable store defaults when not present in the config file.
-	if instance.EfiVars.I2CBus == 0 && instance.EfiVars.Path == "" && !instance.EfiVars.Enabled {
+	// When neither a path nor an explicit non-zero master bus is configured,
+	// default to the BMC's own i2c-slave-eeprom backing file (see defaultConfig).
+	// This also upgrades legacy configs that persisted the old "i2cBus: 0"
+	// (raw master to 0x50), which cannot read the BMC's own slave EEPROM.
+	if instance.EfiVars.Path == "" && instance.EfiVars.I2CBus == 0 {
+		instance.EfiVars.Path = defaultConfig.EfiVars.Path
 		instance.EfiVars.I2CBus = defaultConfig.EfiVars.I2CBus
 	}
 	if instance.EfiVars.I2CAddr == 0 {

@@ -144,23 +144,28 @@ templ PowerBadge(on bool) {
 
 templ powerMenuScript() {
 	<script>
-		async function pollPower() {
-			try {
-				const r = await fetch('/api/vm/gpio', { headers: getAuthHeaders() });
-				const data = await r.json();
-				if (data.code !== 0) return;
-				const on = data.data.pwr;
-				const dot = document.getElementById('power-dot');
-				dot.className = 'inline-block size-2 rounded-full ' + (on ? 'bg-green-500' : 'bg-destructive');
-				const txt = document.getElementById('power-text');
-				txt.textContent = on ? 'Power On' : 'Power Off';
-				txt.className = 'hidden sm:inline';
-			} catch(e) {
-				// Leave dot muted and text as "Checking…" on error.
-			}
+		function renderPower(on) {
+			const dot = document.getElementById('power-dot');
+			dot.className = 'inline-block size-2 rounded-full ' + (on ? 'bg-green-500' : 'bg-destructive');
+			const txt = document.getElementById('power-text');
+			txt.textContent = on ? 'Power On' : 'Power Off';
+			txt.className = 'hidden sm:inline';
 		}
-		pollPower();
-		setInterval(pollPower, 5000);
+
+		// The server pushes a `power` event on every GPIO transition, so there is
+		// nothing to poll. EventSource reconnects on its own after a drop; the
+		// stream re-sends the current state on connect, so a reconnect resyncs.
+		// Auth rides the nano-kvm-token cookie, which EventSource sends for us.
+		const powerEvents = new EventSource('/api/vm/gpio/events');
+		powerEvents.addEventListener('power', (e) => {
+			try {
+				renderPower(JSON.parse(e.data).pwr);
+			} catch(err) { console.error(err); }
+		});
+		powerEvents.onerror = () => {
+			// Leave the last known state on screen while EventSource retries.
+			console.debug('power stream interrupted, reconnecting');
+		};
 
 		async function powerAction(action) {
 			try {
@@ -169,7 +174,7 @@ templ powerMenuScript() {
 					body: JSON.stringify({action}),
 				});
 			} catch(e) { console.error(e); }
-			setTimeout(pollPower, 2000);
+			// No refresh needed — the resulting LED transition arrives on the stream.
 		}
 
 		async function applyBootOverride() {
