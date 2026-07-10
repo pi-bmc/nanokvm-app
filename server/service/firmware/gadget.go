@@ -12,7 +12,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/telemetry"
+	"github.com/pi-bmc/nanokvm-app/server/telemetry"
 )
 
 const (

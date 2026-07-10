@@ -7,7 +7,7 @@ import (
 	"github.com/warthog618/go-gpiocdev"
 	"github.com/warthog618/go-gpiosim"
 
-	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/config"
 )
 
 // ledOffset is the simulated line standing in for the power-LED pin.
@@ -253,5 +253,23 @@ func TestWatchRejectsLegacyMode(t *testing.T) {
 
 	if _, _, err := c.Watch(); err != ErrNoEdgeEvents {
 		t.Fatalf("Watch in legacy mode = %v, want ErrNoEdgeEvents", err)
+	}
+}
+
+// TestRpibootRejectsLegacyMode: the rpiboot combination is a held button
+// press, which legacy direct-rail mode cannot express — it must refuse rather
+// than glitch the supply. The guard fires before any GPIO access, so no sim
+// chip is needed.
+func TestRpibootRejectsLegacyMode(t *testing.T) {
+	cfg := config.GetInstance()
+	cfg.Power.LegacyMode = true
+	t.Cleanup(func() { cfg.Power.LegacyMode = false })
+
+	c := &Controller{
+		lines: make(map[config.GPIOPin]*gpiocdev.Line),
+		subs:  make(map[chan bool]struct{}),
+	}
+	if err := c.Rpiboot(); err == nil {
+		t.Fatal("Rpiboot in legacy mode succeeded, want error")
 	}
 }

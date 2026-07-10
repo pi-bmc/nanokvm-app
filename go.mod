@@ -1,4 +1,4 @@
-module github.com/BMCPi/NanoKVM
+module github.com/pi-bmc/nanokvm-app
 
 go 1.25.7
 
@@ -112,6 +112,6 @@ require (
 )
 
 tool (
-	github.com/BMCPi/NanoKVM/tools/tailwindcss
+	github.com/pi-bmc/nanokvm-app/tools/tailwindcss
 	github.com/a-h/templ/cmd/templ
 )

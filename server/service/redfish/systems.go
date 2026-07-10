@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/efivars"
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
-	"github.com/BMCPi/NanoKVM/server/service/power"
+	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/power"
 )
 
 var validBootTargets = map[string]bool{

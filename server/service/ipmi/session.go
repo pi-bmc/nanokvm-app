@@ -13,8 +13,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/serial"
-	"github.com/BMCPi/NanoKVM/server/telemetry"
+	"github.com/pi-bmc/nanokvm-app/server/service/serial"
+	"github.com/pi-bmc/nanokvm-app/server/telemetry"
 )
 
 // Session lifecycle bounds. RMCP+ Open Session Requests create a session before

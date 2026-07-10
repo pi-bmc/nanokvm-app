@@ -8,7 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/config"
 )
 
 const cookieName = "nano-kvm-token"

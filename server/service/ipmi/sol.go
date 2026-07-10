@@ -7,7 +7,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/serial"
+	"github.com/pi-bmc/nanokvm-app/server/service/serial"
 )
 
 // solState manages a single SOL session backed by the shared serial broker.

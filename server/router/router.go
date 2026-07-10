@@ -6,11 +6,11 @@ import (
 	"path"
 	"strings"
 
-	"github.com/BMCPi/NanoKVM/server/assets"
-	"github.com/BMCPi/NanoKVM/server/config"
-	"github.com/BMCPi/NanoKVM/server/middleware"
-	"github.com/BMCPi/NanoKVM/server/telemetry"
-	"github.com/BMCPi/NanoKVM/server/templates"
+	"github.com/pi-bmc/nanokvm-app/server/assets"
+	"github.com/pi-bmc/nanokvm-app/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/middleware"
+	"github.com/pi-bmc/nanokvm-app/server/telemetry"
+	"github.com/pi-bmc/nanokvm-app/server/templates"
 	templuiAssets "github.com/templui/templui/assets"
 	templuiComponents "github.com/templui/templui/components"
 

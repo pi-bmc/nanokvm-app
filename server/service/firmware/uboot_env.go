@@ -14,7 +14,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/ubootenv"
+	"github.com/pi-bmc/nanokvm-app/server/service/ubootenv"
 )
 
 // LoadUbootEnv returns the parsed machine.env. Fresh read.

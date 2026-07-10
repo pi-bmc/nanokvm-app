@@ -36,7 +36,7 @@ var (
 )
 
 func initMetrics() {
-	m := otel.Meter("github.com/BMCPi/NanoKVM/server")
+	m := otel.Meter("github.com/pi-bmc/nanokvm-app/server")
 
 	var err error
 	mustCounter := func(name, desc, unit string) metric.Int64Counter {

@@ -1,6 +1,6 @@
 package firmware
 
-// release.go queries the BMCPi/firmware-images GitHub releases for the
+// release.go queries the pi-bmc/firmware-images GitHub releases for the
 // latest u-boot image and compares versions.
 //
 // Tag naming convention:
@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	ubootReleasesURL = "https://api.github.com/repos/BMCPi/firmware-images/releases"
+	ubootReleasesURL = "https://api.github.com/repos/pi-bmc/firmware-images/releases"
 	ubootTagPrefix   = "u-boot-"
 	ubootAssetName   = "uboot-rpi.img.xz"
 

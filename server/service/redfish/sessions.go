@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/BMCPi/NanoKVM/server/middleware"
-	"github.com/BMCPi/NanoKVM/server/service/auth"
+	"github.com/pi-bmc/nanokvm-app/server/middleware"
+	"github.com/pi-bmc/nanokvm-app/server/service/auth"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

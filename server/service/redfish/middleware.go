@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/BMCPi/NanoKVM/server/config"
-	"github.com/BMCPi/NanoKVM/server/middleware"
-	"github.com/BMCPi/NanoKVM/server/service/auth"
+	"github.com/pi-bmc/nanokvm-app/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/middleware"
+	"github.com/pi-bmc/nanokvm-app/server/service/auth"
 )
 
 // CheckAuth gates Redfish endpoints. It accepts (in order):

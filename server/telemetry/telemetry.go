@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/config"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"

@@ -110,6 +110,10 @@ func PowerMenu() templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
+				templ_7745c5c3_Err = powerGridBtn("if(confirm('Force the host into rpiboot (USB recovery) mode? A running host is powered off first.')) powerAction('rpiboot')", "col-span-2", icon.Usb, "Recovery (rpiboot)").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div><div class=\"h-px bg-border\"></div><div class=\"space-y-1.5\"><p class=\"px-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground\">Boot Override</p><div class=\"grid grid-cols-2 gap-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -247,7 +251,7 @@ func powerGridBtn(onclick, class string, ico func(...icon.Props) templ.Component
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `power_menu.templ`, Line: 77, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `power_menu.templ`, Line: 78, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {

@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/BMCPi/NanoKVM/server/service/redfish"
+	"github.com/pi-bmc/nanokvm-app/server/service/redfish"
 
 	"github.com/gin-gonic/gin"
 )

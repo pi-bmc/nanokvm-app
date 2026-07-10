@@ -30,6 +30,7 @@ templ PowerMenu() {
 						@powerGridBtn("powerAction('off')", "", icon.PowerOff, "Power Off")
 						@powerGridBtn("powerAction('reset')", "", icon.RefreshCw, "Reset")
 						@powerGridBtn("if(confirm('Force power off?')) powerAction('forceoff')", "text-destructive hover:text-destructive", icon.CircleX, "Force Off")
+						@powerGridBtn("if(confirm('Force the host into rpiboot (USB recovery) mode? A running host is powered off first.')) powerAction('rpiboot')", "col-span-2", icon.Usb, "Recovery (rpiboot)")
 					</div>
 				</div>
 				<div class="h-px bg-border"></div>

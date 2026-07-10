@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/warthog618/go-gpiosim"
 
-	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/config"
 )
 
 const ledOffset = 4

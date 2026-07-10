@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
-	"github.com/BMCPi/NanoKVM/server/service/firmware/eepromkeys"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware/eepromkeys"
 
 	"github.com/gin-gonic/gin"
 )

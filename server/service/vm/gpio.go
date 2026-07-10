@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/proto"
-	"github.com/BMCPi/NanoKVM/server/service/power"
+	"github.com/pi-bmc/nanokvm-app/server/proto"
+	"github.com/pi-bmc/nanokvm-app/server/service/power"
 )
 
 const (
@@ -46,6 +46,8 @@ func (s *Service) SetGpio(c *gin.Context) {
 		err = ctrl.ForceOff()
 	case "reset":
 		err = ctrl.Reset()
+	case "rpiboot":
+		err = ctrl.Rpiboot()
 	default:
 		rsp.ErrRsp(c, -2, fmt.Sprintf("invalid action: %s", req.Action))
 		return

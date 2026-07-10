@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/BMCPi/NanoKVM/server/proto"
+	"github.com/pi-bmc/nanokvm-app/server/proto"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

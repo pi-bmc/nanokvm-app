@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/BMCPi/NanoKVM/server/utils"
+	"github.com/pi-bmc/nanokvm-app/server/utils"
 	log "github.com/sirupsen/logrus"
 )
 

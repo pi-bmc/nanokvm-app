@@ -33,7 +33,7 @@ info:
 
   contact:
     name: NanoKVM
-    url: https://github.com/BMCPi/NanoKVM
+    url: https://github.com/pi-bmc/nanokvm-app
 
 servers:
   - url: /
@@ -58,7 +58,6 @@ security:
   - BMCCookie: []
 
 paths:
-
   # ---------------------------------------------------------------- Discovery
 
   /redfish:
@@ -414,7 +413,10 @@ paths:
                   default: Stream
                 Inserted: { type: boolean }
                 WriteProtected: { type: boolean }
-              example: { Image: "https://releases.ubuntu.com/22.04/ubuntu-22.04-live-server-arm64.iso" }
+              example:
+                {
+                  Image: "https://releases.ubuntu.com/22.04/ubuntu-22.04-live-server-arm64.iso",
+                }
           multipart/form-data:
             schema:
               type: object
@@ -457,8 +459,13 @@ paths:
               schema:
                 type: object
                 properties:
-                  "@odata.type": { type: string, example: "#UpdateService.v1_11_0.UpdateService" }
-                  "@odata.id":   { type: string, example: "/redfish/v1/UpdateService" }
+                  "@odata.type":
+                    {
+                      type: string,
+                      example: "#UpdateService.v1_11_0.UpdateService",
+                    }
+                  "@odata.id":
+                    { type: string, example: "/redfish/v1/UpdateService" }
                   ServiceEnabled: { type: boolean }
                   FirmwareInventory:
                     type: object
@@ -484,12 +491,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  "@odata.type": { type: string, example: "#SoftwareInventory.v1_10_0.SoftwareInventory" }
-                  "@odata.id":   { type: string }
-                  Id:            { type: string, example: BIOS }
-                  Name:          { type: string }
-                  Version:       { type: string, example: "v2026.04-rc4.1" }
-                  Updateable:    { type: boolean }
+                  "@odata.type":
+                    {
+                      type: string,
+                      example: "#SoftwareInventory.v1_10_0.SoftwareInventory",
+                    }
+                  "@odata.id": { type: string }
+                  Id: { type: string, example: BIOS }
+                  Name: { type: string }
+                  Version: { type: string, example: "v2026.04-rc4.1" }
+                  Updateable: { type: boolean }
 
   /redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate:
     post:
@@ -524,7 +535,6 @@ paths:
         "202": { description: Update accepted; runs in background. }
 
 components:
-
   securitySchemes:
     XAuthToken:
       type: apiKey
@@ -546,7 +556,6 @@ components:
       description: Session identifier.
 
   responses:
-
     Collection:
       description: A Redfish collection (Members + Members@odata.count).
       content:
@@ -554,9 +563,9 @@ components:
           schema:
             type: object
             properties:
-              "@odata.type":   { type: string }
-              "@odata.id":     { type: string }
-              Name:            { type: string }
+              "@odata.type": { type: string }
+              "@odata.id": { type: string }
+              Name: { type: string }
               "Members@odata.count": { type: integer, format: int32 }
               Members:
                 type: array
@@ -590,44 +599,52 @@ components:
           schema: { $ref: "#/components/schemas/RedfishError" }
 
   schemas:
-
     ServiceRoot:
       type: object
       properties:
-        "@odata.type":    { type: string, example: "#ServiceRoot.v1_9_0.ServiceRoot" }
-        "@odata.id":      { type: string, example: "/redfish/v1" }
+        "@odata.type":
+          { type: string, example: "#ServiceRoot.v1_9_0.ServiceRoot" }
+        "@odata.id": { type: string, example: "/redfish/v1" }
         "@odata.context": { type: string }
-        Id:               { type: string, example: RootService }
-        Name:             { type: string, example: "Root Service" }
-        Systems:        { type: object, properties: { "@odata.id": { type: string } } }
-        Managers:       { type: object, properties: { "@odata.id": { type: string } } }
-        Chassis:        { type: object, properties: { "@odata.id": { type: string } } }
-        SessionService: { type: object, properties: { "@odata.id": { type: string } } }
-        UpdateService:  { type: object, properties: { "@odata.id": { type: string } } }
+        Id: { type: string, example: RootService }
+        Name: { type: string, example: "Root Service" }
+        Systems: { type: object, properties: { "@odata.id": { type: string } } }
+        Managers:
+          { type: object, properties: { "@odata.id": { type: string } } }
+        Chassis: { type: object, properties: { "@odata.id": { type: string } } }
+        SessionService:
+          { type: object, properties: { "@odata.id": { type: string } } }
+        UpdateService:
+          { type: object, properties: { "@odata.id": { type: string } } }
 
     Session:
       type: object
       properties:
-        "@odata.type":   { type: string, example: "#Session.v1_5_0.Session" }
-        "@odata.id":     { type: string, example: "/redfish/v1/SessionService/Sessions/abc123" }
-        Id:              { type: string }
-        Name:            { type: string }
-        UserName:        { type: string }
+        "@odata.type": { type: string, example: "#Session.v1_5_0.Session" }
+        "@odata.id":
+          {
+            type: string,
+            example: "/redfish/v1/SessionService/Sessions/abc123",
+          }
+        Id: { type: string }
+        Name: { type: string }
+        UserName: { type: string }
 
     ComputerSystem:
       type: object
       properties:
-        "@odata.type":     { type: string, example: "#ComputerSystem.v1_13_0.ComputerSystem" }
-        "@odata.id":       { type: string, example: "/redfish/v1/Systems/1" }
-        Id:                { type: string, example: "1" }
-        Name:              { type: string }
-        SystemType:        { type: string, example: Physical }
-        PowerState:        { type: string, enum: ["On", "Off"] }
-        Model:             { type: string }
-        Manufacturer:      { type: string }
-        SerialNumber:      { type: string }
-        MACAddress:        { type: string }
-        FirmwareVersion:   { type: string }
+        "@odata.type":
+          { type: string, example: "#ComputerSystem.v1_13_0.ComputerSystem" }
+        "@odata.id": { type: string, example: "/redfish/v1/Systems/1" }
+        Id: { type: string, example: "1" }
+        Name: { type: string }
+        SystemType: { type: string, example: Physical }
+        PowerState: { type: string, enum: ["On", "Off"] }
+        Model: { type: string }
+        Manufacturer: { type: string }
+        SerialNumber: { type: string }
+        MACAddress: { type: string }
+        FirmwareVersion: { type: string }
         ProcessorSummary:
           type: object
           properties:
@@ -635,8 +652,10 @@ components:
         Boot:
           type: object
           properties:
-            BootSourceOverrideTarget:  { type: string, enum: [None, Pxe, Hdd, Cd, BiosSetup, UefiHttp] }
-            BootSourceOverrideEnabled: { type: string, enum: [Disabled, Once, Continuous] }
+            BootSourceOverrideTarget:
+              { type: string, enum: [None, Pxe, Hdd, Cd, BiosSetup, UefiHttp] }
+            BootSourceOverrideEnabled:
+              { type: string, enum: [Disabled, Once, Continuous] }
             "BootSourceOverrideTarget@Redfish.AllowableValues":
               type: array
               items: { type: string }
@@ -666,22 +685,22 @@ components:
     Bios:
       type: object
       properties:
-        "@odata.type":        { type: string, example: "#Bios.v1_2_0.Bios" }
-        "@odata.id":          { type: string, example: "/redfish/v1/Systems/1/Bios" }
-        Id:                   { type: string, example: Bios }
-        Name:                 { type: string }
-        Description:          { type: string }
-        BiosVersion:          { type: string, description: U-Boot version string. }
-        AttributeRegistry:    { type: string, example: RPiBootloader.1 }
-        Attributes:           { $ref: "#/components/schemas/BiosAttributes" }
+        "@odata.type": { type: string, example: "#Bios.v1_2_0.Bios" }
+        "@odata.id": { type: string, example: "/redfish/v1/Systems/1/Bios" }
+        Id: { type: string, example: Bios }
+        Name: { type: string }
+        Description: { type: string }
+        BiosVersion: { type: string, description: U-Boot version string. }
+        AttributeRegistry: { type: string, example: RPiBootloader.1 }
+        Attributes: { $ref: "#/components/schemas/BiosAttributes" }
         "@Redfish.Settings":
           type: object
           properties:
-            "@odata.type":         { type: string }
+            "@odata.type": { type: string }
             SettingsObject:
               type: object
               properties:
-                "@odata.id":       { type: string }
+                "@odata.id": { type: string }
             SupportedApplyTimes:
               type: array
               items: { type: string, example: OnReset }
@@ -691,7 +710,7 @@ components:
             ActiveSoftwareImage:
               type: object
               properties:
-                "@odata.id":       { type: string }
+                "@odata.id": { type: string }
         Actions:
           type: object
 
@@ -699,12 +718,14 @@ components:
       type: object
       properties:
         "@odata.type": { type: string, example: "#Bios.v1_2_0.Bios" }
-        "@odata.id":   { type: string, example: "/redfish/v1/Systems/1/Bios/Settings" }
-        Id:            { type: string, example: Settings }
-        Name:          { type: string }
-        Description:   { type: string }
-        Attributes:    { $ref: "#/components/schemas/BiosAttributes" }
-        Pending:       { type: boolean, description: True when a pieeprom.upd is staged. }
+        "@odata.id":
+          { type: string, example: "/redfish/v1/Systems/1/Bios/Settings" }
+        Id: { type: string, example: Settings }
+        Name: { type: string }
+        Description: { type: string }
+        Attributes: { $ref: "#/components/schemas/BiosAttributes" }
+        Pending:
+          { type: boolean, description: True when a pieeprom.upd is staged. }
 
     BiosAttributes:
       type: object
@@ -718,36 +739,45 @@ components:
           - { type: integer }
           - { type: boolean }
       properties:
-        BOOT_ORDER:        { type: string, example: "0xf41", description: Boot mode priority; read right-to-left. }
-        BOOT_UART:         { type: integer, enum: [0, 1] }
-        UART_BAUD:         { type: integer, example: 115200 }
-        WAKE_ON_GPIO:      { type: integer, enum: [0, 1] }
+        BOOT_ORDER:
+          {
+            type: string,
+            example: "0xf41",
+            description: Boot mode priority; read right-to-left.,
+          }
+        BOOT_UART: { type: integer, enum: [0, 1] }
+        UART_BAUD: { type: integer, example: 115200 }
+        WAKE_ON_GPIO: { type: integer, enum: [0, 1] }
         POWER_OFF_ON_HALT: { type: integer, enum: [0, 1] }
-        PSU_MAX_CURRENT:   { type: integer, enum: [3000, 5000] }
-        NET_INSTALL_ENABLED:     { type: integer, enum: [0, 1] }
+        PSU_MAX_CURRENT: { type: integer, enum: [3000, 5000] }
+        NET_INSTALL_ENABLED: { type: integer, enum: [0, 1] }
         NET_INSTALL_AT_POWER_ON: { type: integer, enum: [0, 1] }
-        DISABLE_HDMI:      { type: integer, enum: [0, 1] }
-        HDMI_DELAY:        { type: integer }
+        DISABLE_HDMI: { type: integer, enum: [0, 1] }
+        HDMI_DELAY: { type: integer }
         BOOT_WATCHDOG_TIMEOUT: { type: integer }
         ENABLE_SELF_UPDATE: { type: integer, enum: [0, 1] }
 
     AttributeRegistry:
       type: object
       properties:
-        "@odata.type":     { type: string, example: "#AttributeRegistry.v1_3_8.AttributeRegistry" }
-        "@odata.id":       { type: string }
-        Id:                { type: string, example: RPiBootloader.1 }
-        Name:              { type: string }
-        Language:          { type: string, example: en }
-        OwningEntity:      { type: string, example: raspberrypi.com }
-        RegistryVersion:   { type: string }
+        "@odata.type":
+          {
+            type: string,
+            example: "#AttributeRegistry.v1_3_8.AttributeRegistry",
+          }
+        "@odata.id": { type: string }
+        Id: { type: string, example: RPiBootloader.1 }
+        Name: { type: string }
+        Language: { type: string, example: en }
+        OwningEntity: { type: string, example: raspberrypi.com }
+        RegistryVersion: { type: string }
         SupportedSystems:
           type: array
           items:
             type: object
             properties:
-              ProductName:              { type: string }
-              SystemId:                 { type: string }
+              ProductName: { type: string }
+              SystemId: { type: string }
               AttributeRegistryVersion: { type: string }
         RegistryEntries:
           type: object
@@ -758,66 +788,76 @@ components:
                 type: object
                 properties:
                   AttributeName: { type: string, example: BOOT_UART }
-                  Type:          { type: string, enum: [Boolean, Integer, String, Enumeration, Password] }
-                  DefaultValue:  { type: string, example: "0" }
-                  HelpText:      { type: string }
-                  ReadOnly:      { type: boolean }
+                  Type:
+                    {
+                      type: string,
+                      enum: [Boolean, Integer, String, Enumeration, Password],
+                    }
+                  DefaultValue: { type: string, example: "0" }
+                  HelpText: { type: string }
+                  ReadOnly: { type: boolean }
                   ResetRequired: { type: boolean }
 
     Manager:
       type: object
       properties:
         "@odata.type": { type: string, example: "#Manager.v1_15_0.Manager" }
-        "@odata.id":   { type: string, example: "/redfish/v1/Managers/1" }
-        Id:            { type: string, example: "1" }
-        Name:          { type: string, example: "NanoKVM BMC" }
-        ManagerType:   { type: string, example: BMC }
+        "@odata.id": { type: string, example: "/redfish/v1/Managers/1" }
+        Id: { type: string, example: "1" }
+        Name: { type: string, example: "NanoKVM BMC" }
+        ManagerType: { type: string, example: BMC }
         FirmwareVersion: { type: string }
         Status:
           type: object
           properties:
-            State:   { type: string, example: Enabled }
-            Health:  { type: string, example: OK }
+            State: { type: string, example: Enabled }
+            Health: { type: string, example: OK }
 
     SerialInterface:
       type: object
       properties:
-        "@odata.type": { type: string, example: "#SerialInterface.v1_2_0.SerialInterface" }
-        "@odata.id":   { type: string }
-        Id:            { type: string, example: "1" }
-        Name:          { type: string }
+        "@odata.type":
+          { type: string, example: "#SerialInterface.v1_2_0.SerialInterface" }
+        "@odata.id": { type: string }
+        Id: { type: string, example: "1" }
+        Name: { type: string }
         InterfaceEnabled: { type: boolean }
-        SignalType:    { type: string, example: Rs232 }
-        BitRate:       { type: string, example: "115200" }
-        Parity:        { type: string, example: None }
-        DataBits:      { type: string, example: "8" }
-        StopBits:      { type: string, example: "1" }
-        FlowControl:   { type: string, example: None }
+        SignalType: { type: string, example: Rs232 }
+        BitRate: { type: string, example: "115200" }
+        Parity: { type: string, example: None }
+        DataBits: { type: string, example: "8" }
+        StopBits: { type: string, example: "1" }
+        FlowControl: { type: string, example: None }
 
     SerialInterfacePatch:
       type: object
       properties:
         InterfaceEnabled: { type: boolean }
-        BitRate:          { type: string }
-        Parity:           { type: string }
-        DataBits:         { type: string }
-        StopBits:         { type: string }
-        FlowControl:      { type: string }
+        BitRate: { type: string }
+        Parity: { type: string }
+        DataBits: { type: string }
+        StopBits: { type: string }
+        FlowControl: { type: string }
 
     VirtualMedia:
       type: object
       properties:
-        "@odata.type": { type: string, example: "#VirtualMedia.v1_5_0.VirtualMedia" }
-        "@odata.id":   { type: string }
-        Id:            { type: string, example: "1" }
-        Name:          { type: string }
+        "@odata.type":
+          { type: string, example: "#VirtualMedia.v1_5_0.VirtualMedia" }
+        "@odata.id": { type: string }
+        Id: { type: string, example: "1" }
+        Name: { type: string }
         MediaTypes:
           type: array
           items: { type: string, example: CD }
-        Image:         { type: [string, "null"], example: ubuntu-22.04-live-server-arm64.iso }
-        Inserted:      { type: boolean }
+        Image:
+          {
+            type: [string, "null"],
+            example: ubuntu-22.04-live-server-arm64.iso,
+          }
+        Inserted: { type: boolean }
         WriteProtected: { type: boolean }
-        ConnectedVia:  { type: string, example: Applet }
+        ConnectedVia: { type: string, example: Applet }
         Actions:
           type: object
 
@@ -830,7 +870,7 @@ components:
         error:
           type: object
           properties:
-            code:    { type: string, example: "Base.1.13.GeneralError" }
+            code: { type: string, example: "Base.1.13.GeneralError" }
             message: { type: string }
             "@Message.ExtendedInfo":
               type: array
@@ -838,5 +878,5 @@ components:
                 type: object
                 properties:
                   MessageId: { type: string }
-                  Message:   { type: string }
-                  Severity:  { type: string, enum: [OK, Warning, Critical] }
+                  Message: { type: string }
+                  Severity: { type: string, enum: [OK, Warning, Critical] }

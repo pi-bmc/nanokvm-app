@@ -12,8 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/middleware"
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/middleware"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 )
 
 // Upload body caps. Uploads are streamed to the image (constant memory), so

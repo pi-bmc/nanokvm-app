@@ -15,7 +15,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/config"
 )
 
 // cacheTTL bounds how long a parsed snapshot is served without re-reading

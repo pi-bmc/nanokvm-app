@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BMCPi/NanoKVM/server/proto"
 	"github.com/gin-gonic/gin"
+	"github.com/pi-bmc/nanokvm-app/server/proto"
 	log "github.com/sirupsen/logrus"
 )
 

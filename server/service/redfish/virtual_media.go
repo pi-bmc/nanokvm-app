@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 )
 
 // insertMediaRequest is the JSON body for VirtualMedia.InsertMedia.

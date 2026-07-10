@@ -3,7 +3,7 @@ package redfish
 // update_service.go implements a minimal Redfish UpdateService surface
 // for the U-Boot firmware: FirmwareInventory listing the current/latest
 // versions, plus a SimpleUpdate action that triggers an in-place
-// download from the BMCPi/firmware-images GitHub releases.
+// download from the pi-bmc/firmware-images GitHub releases.
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 )
 
 // GetUpdateService returns the UpdateService root.

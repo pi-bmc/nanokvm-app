@@ -1,8 +1,8 @@
 package router
 
 import (
-	"github.com/BMCPi/NanoKVM/server/middleware"
-	"github.com/BMCPi/NanoKVM/server/service/application"
+	"github.com/pi-bmc/nanokvm-app/server/middleware"
+	"github.com/pi-bmc/nanokvm-app/server/service/application"
 
 	"github.com/gin-gonic/gin"
 )

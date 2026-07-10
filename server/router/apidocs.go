@@ -8,8 +8,8 @@ package router
 import (
 	"sync"
 
-	"github.com/BMCPi/NanoKVM/server/service/redfish"
-	"github.com/BMCPi/NanoKVM/server/templates"
+	"github.com/pi-bmc/nanokvm-app/server/service/redfish"
+	"github.com/pi-bmc/nanokvm-app/server/templates"
 )
 
 var (

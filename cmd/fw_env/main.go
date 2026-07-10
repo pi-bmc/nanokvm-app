@@ -31,7 +31,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/BMCPi/NanoKVM/server/service/ubootenv"
+	"github.com/pi-bmc/nanokvm-app/server/service/ubootenv"
 )
 
 const (

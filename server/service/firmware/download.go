@@ -17,7 +17,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/ulikunitz/xz"
 
-	"github.com/BMCPi/NanoKVM/server/telemetry"
+	"github.com/pi-bmc/nanokvm-app/server/telemetry"
 )
 
 const downloadSentinel = "/tmp/.firmware_download_in_progress"

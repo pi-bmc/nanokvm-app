@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BMCPi/NanoKVM/server/config"
-	"github.com/BMCPi/NanoKVM/server/service/application"
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/service/application"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 
 	log "github.com/sirupsen/logrus"
 )

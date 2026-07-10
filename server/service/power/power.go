@@ -14,6 +14,8 @@
 //     duration, then releasing (float back to HIGH).
 //   - Short press (~300 ms): power-on or graceful/soft shutdown.
 //   - Long press  (≥5 s):   forced hard shutdown (ATX-style hold).
+//   - Held press through power-on (~3 s from standby): forces the Raspberry
+//     Pi 5 BootROM into rpiboot (USB device) mode — see Rpiboot.
 //
 // # Legacy / fallback mode
 //
@@ -50,8 +52,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/warthog618/go-gpiocdev"
 
-	"github.com/BMCPi/NanoKVM/server/config"
-	"github.com/BMCPi/NanoKVM/server/telemetry"
+	"github.com/pi-bmc/nanokvm-app/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/telemetry"
 )
 
 // ErrNoEdgeEvents is returned by Watch when the controller cannot deliver
@@ -68,6 +70,13 @@ const (
 
 	// longPressDuration is the hold time for a forced power-off (ATX spec ≥4 s).
 	longPressDuration = 5500 * time.Millisecond
+
+	// rpibootHoldDuration is how long the power button stays held to force the
+	// Raspberry Pi 5 BootROM into rpiboot mode. The press wakes the PMIC from
+	// standby and the BootROM samples the button within the first moments of
+	// boot, so a few seconds is plenty; it is kept well under the ≥4 s
+	// forced-off threshold in case the host turns out to be running normally.
+	rpibootHoldDuration = 3 * time.Second
 
 	// toggleDelay is the pause between steps in the legacy boot sequence.
 	toggleDelay = 200 * time.Millisecond
@@ -308,6 +317,49 @@ func (c *Controller) Reset() (retErr error) {
 
 	log.Info("power: reset — boot sequence (legacy)")
 	return c.legacyBootSequence()
+}
+
+// Rpiboot forces the Raspberry Pi 5 into rpiboot (BootROM USB device) mode,
+// where it enumerates as VID:PID 0a5c:2712 and waits for a payload over USB
+// (see cmd/rpiboot).
+//
+// The documented combination is "hold the power button whilst applying
+// power". The BMC cannot cut the 5 V rail, but the same combination is
+// reachable from PMIC standby: pressing the button is itself what wakes the
+// PMIC, so a press held through the resulting power-on is sampled by the
+// BootROM exactly like a press held while inserting the supply.
+//
+// Sequence: if the host is running, force it off first (long press, then wait
+// for the power LED to drop), then press and hold the button for
+// rpibootHoldDuration and release.
+//
+// Button-press mode only: legacy mode drives the supply rail directly and has
+// no button to hold, so there is no combination to send.
+func (c *Controller) Rpiboot() (retErr error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	defer func() { telemetry.PowerOperation(context.Background(), "rpiboot", retErr) }()
+
+	if isLegacy() {
+		return fmt.Errorf("rpiboot requires button-press mode (legacy mode has no power button to hold)")
+	}
+
+	on, err := c.readState()
+	if err != nil {
+		return fmt.Errorf("read state: %w", err)
+	}
+	if on {
+		log.Info("power: rpiboot — force off (long button press)")
+		if err := c.buttonPress(longPressDuration); err != nil {
+			return fmt.Errorf("rpiboot force-off: %w", err)
+		}
+		if err := c.waitForOff(); err != nil {
+			log.Warnf("power: rpiboot — timed out waiting for off, proceeding anyway: %v", err)
+		}
+	}
+
+	log.Info("power: rpiboot — holding power button through power-on")
+	return c.buttonPress(rpibootHoldDuration)
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ package ipmi
 //     Cmd 0x01 — Get U-Boot Version
 //                Response: cc, updateAvailable(0|1), currentLen, current[],
 //                          latestLen, latest[]
-//     Cmd 0x02 — Trigger U-Boot Update (latest from BMCPi/firmware-images)
+//     Cmd 0x02 — Trigger U-Boot Update (latest from pi-bmc/firmware-images)
 //                Response: cc only (started asynchronously)
 //
 // Strings are ASCII, length-prefixed (single byte), max 255 bytes.
@@ -15,7 +15,7 @@ package ipmi
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/BMCPi/NanoKVM/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 )
 
 const (

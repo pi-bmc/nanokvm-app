@@ -35,9 +35,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BMCPi/NanoKVM/server/service/firmware/eepromkeys"
-	"github.com/BMCPi/NanoKVM/server/service/firmware/eepromupdater"
-	"github.com/BMCPi/NanoKVM/server/service/firmware/rpieeprom"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware/eepromkeys"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware/eepromupdater"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware/rpieeprom"
 
 	log "github.com/sirupsen/logrus"
 )

@@ -4,7 +4,7 @@ package firmware
 // to U-Boot release versions used to boot them on Raspberry Pi.
 //
 // When a user selects a kernel version, the corresponding U-Boot image is
-// downloaded from BMCPi/firmware-images and stored as a versioned image
+// downloaded from pi-bmc/firmware-images and stored as a versioned image
 // alongside the active image (e.g. uboot-v2026.04.img). The active image
 // (uboot-rpi.img) can then be swapped to any downloaded version without
 // losing env files.

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/BMCPi/NanoKVM/server/utils"
+	"github.com/pi-bmc/nanokvm-app/server/utils"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
