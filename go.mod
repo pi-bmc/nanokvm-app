@@ -112,6 +112,6 @@ require (
 )
 
 tool (
-	github.com/pi-bmc/nanokvm-app/tools/tailwindcss
 	github.com/a-h/templ/cmd/templ
+	github.com/pi-bmc/nanokvm-app/tools/tailwindcss
 )
