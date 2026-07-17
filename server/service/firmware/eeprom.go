@@ -93,11 +93,20 @@ type EEPROMConfigSummary struct {
 	// inert until the file is downloaded.
 	RecoveryBinPresent bool `json:"recoveryBinPresent"`
 	// Version is the bootloader build timestamp parsed from the image
-	// (BUILD_TIMESTAMP marker inside bootcode). Empty when the image
-	// is missing or doesn't carry the marker.
+	// (BUILD_TIMESTAMP marker inside bootcode). Empty when no image is on
+	// the FAT — which is now the common case, since U-Boot publishes the
+	// live config over I2C instead of dumping pieeprom.bin. Prefer
+	// GitVersion/UpdatedUnix for the running bootloader's identity.
 	Version string `json:"version,omitempty"`
 	// VersionUnix is the same value as a Unix timestamp; 0 when unknown.
 	VersionUnix int64 `json:"versionUnix,omitempty"`
+	// GitVersion is the rpi-eeprom git hash of the running bootloader, from
+	// the BootloaderVersion UEFI variable (/chosen/bootloader/version).
+	// Empty when U-Boot has not published it.
+	GitVersion string `json:"gitVersion,omitempty"`
+	// UpdatedUnix is when the EEPROM was last flashed, from the
+	// BootloaderUpdateTimestamp UEFI variable; 0 when unknown.
+	UpdatedUnix int64 `json:"updatedUnix,omitempty"`
 	// Catalog is the documented EEPROM-key reference for the active
 	// platform (name/type/default/description). Lets clients build a
 	// structured editor that shows the default beside each value.
@@ -115,11 +124,16 @@ type EEPROMConfigSummary struct {
 // UI reflects what the host will see after the next flash. Source on
 // the summary tells the caller which file was read.
 func (c *Controller) GetEEPROMConfig() (EEPROMConfigSummary, error) {
+	// Drop staged files the firmware has already applied (owns the file
+	// lifecycle U-Boot's PREBOOT used to handle).
+	c.reconcilePieepromFiles()
+
 	pending, _ := c.hasFileOnImage(eepromPendingFile)
 	binPresent, _ := c.hasFileOnImage(eepromBinaryFile)
 	recoveryPresent, _ := c.hasFileOnImage(eepromRecoveryFile)
 
-	text, source, version, versionUnix := c.readBootconfFromImage()
+	prov := c.GetBootloaderProvenance()
+	text, source, version, versionUnix := c.readLiveBootconf(prov)
 
 	summary := summarise(text, source, pending)
 	summary.PieepromBinPresent = binPresent
@@ -128,41 +142,62 @@ func (c *Controller) GetEEPROMConfig() (EEPROMConfigSummary, error) {
 	summary.Catalog = eepromkeys.ForPlatform(PlatformDefault)
 	summary.Version = version
 	summary.VersionUnix = versionUnix
+	summary.GitVersion = prov.GitVersion
+	summary.UpdatedUnix = prov.UpdatedUnix
 	return summary, nil
 }
 
-// readBootconfFromImage opens the most-relevant EEPROM image on the FAT
-// (pending .upd if any, else the live .bin) and extracts the embedded
-// bootconf.txt plus the build timestamp. Returns empty strings when no
-// image is present or the parse fails — callers treat that as "live
-// config not yet available" rather than as an error, because the
-// situation is recoverable (U-Boot will write a fresh .bin on next
-// boot).
-func (c *Controller) readBootconfFromImage() (text, source, version string, versionUnix int64) {
-	candidates := []string{eepromPendingFile, eepromBinaryFile}
-	for _, name := range candidates {
-		data, err := c.ReadFileFromImage(name)
-		if err != nil || len(data) == 0 {
-			continue
-		}
-		img, err := rpieeprom.ParseBytes(data)
-		if err != nil {
-			log.Debugf("eeprom: parse %s failed: %v", name, err)
-			continue
-		}
-		source = name
-		if bc, err := img.GetFile(rpieeprom.BootConfTxt); err == nil {
-			text = string(bc)
-		} else {
-			log.Debugf("eeprom: extract bootconf.txt from %s failed: %v", name, err)
-		}
-		if v, ok := img.Version(); ok {
-			version = v.Format("2006-01-02")
-			versionUnix = v.Unix()
-		}
-		return text, source, version, versionUnix
+// readLiveBootconf resolves the config text to display, in priority order:
+//
+//  1. a staged pieeprom.upd — a preview of what the next boot will flash;
+//  2. the live BootloaderConfig UEFI variable U-Boot publishes over I2C —
+//     the running configuration, and the normal source now that U-Boot no
+//     longer dumps pieeprom.bin;
+//  3. a pieeprom.bin on the FAT — a legacy fallback, present only if some
+//     other actor wrote one.
+//
+// Returns empty strings when nothing is available; callers treat that as
+// "live config not reported yet" rather than as an error.
+func (c *Controller) readLiveBootconf(prov BootloaderProvenance) (text, source, version string, versionUnix int64) {
+	if t, v, vu, ok := c.bootconfFromImage(eepromPendingFile); ok {
+		return t, eepromPendingFile, v, vu
+	}
+	if prov.Config != "" {
+		return prov.Config, eepromConfigVarSource, "", 0
+	}
+	if t, v, vu, ok := c.bootconfFromImage(eepromBinaryFile); ok {
+		return t, eepromBinaryFile, v, vu
 	}
 	return "", "", "", 0
+}
+
+// eepromConfigVarSource is the Source value reported when the config text
+// came from the BootloaderConfig UEFI variable rather than an image file.
+const eepromConfigVarSource = "BootloaderConfig"
+
+// bootconfFromImage extracts bootconf.txt and the build timestamp from a
+// pieeprom image file on the FAT. ok is false when the file is absent, empty,
+// or unparseable.
+func (c *Controller) bootconfFromImage(name string) (text, version string, versionUnix int64, ok bool) {
+	data, err := c.ReadFileFromImage(name)
+	if err != nil || len(data) == 0 {
+		return "", "", 0, false
+	}
+	img, err := rpieeprom.ParseBytes(data)
+	if err != nil {
+		log.Debugf("eeprom: parse %s failed: %v", name, err)
+		return "", "", 0, false
+	}
+	if bc, err := img.GetFile(rpieeprom.BootConfTxt); err == nil {
+		text = string(bc)
+	} else {
+		log.Debugf("eeprom: extract bootconf.txt from %s failed: %v", name, err)
+	}
+	if v, ok := img.Version(); ok {
+		version = v.Format("2006-01-02")
+		versionUnix = v.Unix()
+	}
+	return text, version, versionUnix, true
 }
 
 // SetEEPROMConfig stages a bootloader config change as pieeprom.upd by

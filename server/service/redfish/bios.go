@@ -54,6 +54,24 @@ func (s *Service) GetBios(c *gin.Context) {
 		biosVersion = info.BIOSVersion
 	}
 
+	// Vendor OEM block: the running rpi-eeprom bootloader's provenance, which
+	// U-Boot mirrors from the firmware device tree into UEFI variables. This
+	// is the RPi bootloader layer beneath U-Boot; BiosVersion above stays the
+	// U-Boot/SMBIOS version. Only include fields U-Boot actually reported.
+	nanokvmOem := map[string]any{
+		odataTypeKey:    "#NanoKVM.v1_0_0.Bios",
+		"Diagnostics":   diag,
+		"SourceMissing": diag.Source == "",
+	}
+	if prov := ctrl.GetBootloaderProvenance(); prov.Available() {
+		if prov.GitVersion != "" {
+			nanokvmOem["BootloaderVersion"] = prov.GitVersion
+		}
+		if prov.UpdatedUnix != 0 {
+			nanokvmOem["BootloaderUpdatedUnix"] = prov.UpdatedUnix
+		}
+	}
+
 	c.JSON(http.StatusOK, Bios{
 		Resource: Resource{
 			ODataType:    "#Bios.v1_2_0.Bios",
@@ -69,7 +87,7 @@ func (s *Service) GetBios(c *gin.Context) {
 		// @Redfish.Settings — DMTF DSP2046 SettingsObject link. Clients
 		// PATCH /Bios/Settings to stage changes; the live Attributes
 		// here only update after the host has flashed the EEPROM and
-		// rebooted (U-Boot writes a refreshed pieeprom.bin each boot).
+		// rebooted (U-Boot then republishes the live config over I2C).
 		Settings: &SettingsAnnotation{
 			ODataType:           "#Settings.v1_3_5.Settings",
 			SettingsObject:      Link(biosSettingsPath),
@@ -84,18 +102,13 @@ func (s *Service) GetBios(c *gin.Context) {
 		Links: Oem{
 			"ActiveSoftwareImage": Link(firmwareBIOSPath),
 		},
-		// Vendor-namespaced diagnostics — DMTF DSP0266 §6.4.13 Oem
-		// pattern. Tells an operator WHY Attributes might be empty:
-		// which FAT paths were probed, whether each one was found,
-		// which one was actually parsed, and what section headers it
-		// contained. Critical for first-boot debugging where U-Boot
-		// hasn't written pieeprom.bin yet.
+		// Vendor-namespaced OEM block: bootloader provenance (built above)
+		// plus diagnostics (DMTF DSP0266 §6.4.13). Diagnostics tell an
+		// operator WHY Attributes might be empty: which FAT paths were
+		// probed, which parsed, and what section headers they held —
+		// useful on first boot before any config is available.
 		Oem: Oem{
-			"NanoKVM": map[string]any{
-				odataTypeKey:    "#NanoKVM.v1_0_0.Bios",
-				"Diagnostics":   diag,
-				"SourceMissing": diag.Source == "",
-			},
+			"NanoKVM": nanokvmOem,
 		},
 	})
 }
