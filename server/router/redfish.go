@@ -1,6 +1,8 @@
 package router
 
 import (
+	"strings"
+
 	"github.com/pi-bmc/nanokvm-app/server/service/redfish"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +13,15 @@ func redfishRouter(r *gin.Engine) {
 
 	// Public endpoints
 	r.GET("/redfish", service.GetRedfishBase)
-	r.GET("/redfish/v1", service.GetServiceRoot)
+
+	// The service root is served at both spellings. The canonical form is
+	// schemas.DefaultServiceRoot ("/redfish/v1/", trailing slash) — that is
+	// what gofish requests on Login and what we now emit as @odata.id. The
+	// bare "/redfish/v1" stays registered so existing callers keep working
+	// rather than relying on gin's 301 redirect.
+	r.GET(redfish.ServiceRootPath, service.GetServiceRoot)
+	r.GET(strings.TrimSuffix(redfish.ServiceRootPath, "/"), service.GetServiceRoot)
+
 	r.GET("/redfish/v1/SessionService", service.GetSessionService)
 	r.POST("/redfish/v1/SessionService/Sessions", service.CreateSession)
 

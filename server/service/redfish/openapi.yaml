@@ -77,10 +77,31 @@ paths:
                     type: string
                     example: "/redfish/v1/"
 
-  /redfish/v1:
+  /redfish/v1/:
     get:
       tags: [ServiceRoot]
       summary: ServiceRoot — entry point that links to every collection.
+      description:
+        The canonical service root, matching gofish's schemas.DefaultServiceRoot.
+        This is the trailing-slash spelling DMTF clients request on Login and the
+        value emitted as "@odata.id". The bare "/redfish/v1" is also served, for
+        clients that predate this.
+      security: []
+      responses:
+        "200":
+          description: ServiceRoot document.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRoot"
+
+  /redfish/v1:
+    get:
+      tags: [ServiceRoot]
+      summary: ServiceRoot without the trailing slash (compatibility alias).
+      description:
+        Identical to "/redfish/v1/". Retained so existing callers keep working;
+        new clients should use the canonical trailing-slash form.
       security: []
       responses:
         "200":
@@ -604,7 +625,7 @@ components:
       properties:
         "@odata.type":
           { type: string, example: "#ServiceRoot.v1_9_0.ServiceRoot" }
-        "@odata.id": { type: string, example: "/redfish/v1" }
+        "@odata.id": { type: string, example: "/redfish/v1/" }
         "@odata.context": { type: string }
         Id: { type: string, example: RootService }
         Name: { type: string, example: "Root Service" }
@@ -643,12 +664,74 @@ components:
         Model: { type: string }
         Manufacturer: { type: string }
         SerialNumber: { type: string }
-        MACAddress: { type: string }
-        FirmwareVersion: { type: string }
+        # Identity below is read from the SMBIOS tables the host mirrors into
+        # the EEPROM (offset 0x6000), falling back to the U-Boot environment
+        # (0x4000) when the region is blank. Every property is omitted rather
+        # than emitted empty — Redfish enums have no valid empty member.
+        SKU: { type: string, description: SMBIOS type-1 SKU, e.g. "E04171". }
+        SubModel:
+          {
+            type: string,
+            description: SMBIOS type-1 Version — the board revision, e.g. "1.1".,
+          }
+        UUID:
+          {
+            type: string,
+            description: SMBIOS type-1 UUID. Not present in the U-Boot environment.,
+          }
+        BiosVersion:
+          {
+            type: string,
+            description:
+              U-Boot version. This is the standard ComputerSystem property for
+              boot-firmware version; a prior release emitted a non-schema
+              "FirmwareVersion" here instead.,
+          }
         ProcessorSummary:
           type: object
+          description:
+            Redfish defines no Manufacturer member here — SMBIOS's CPU
+            manufacturer is reported under Oem.NanoKVM instead.
           properties:
             Model: { type: string }
+            Count: { type: integer }
+            CoreCount: { type: integer }
+            LogicalProcessorCount: { type: integer }
+        Oem:
+          type: object
+          description:
+            Vendor-namespaced values that have no standard ComputerSystem
+            property (DSP0266 §6.4.13).
+          properties:
+            NanoKVM:
+              type: object
+              properties:
+                "@odata.type":
+                  { type: string, example: "#NanoKVM.v1_0_0.ComputerSystem" }
+                InventorySource:
+                  {
+                    type: string,
+                    enum: [SMBIOS, UBootEnv],
+                    description: Which EEPROM region this identity was read from.,
+                  }
+                MACAddress:
+                  {
+                    type: string,
+                    description:
+                      From the env's ethaddr. Redfish models NICs as an
+                      EthernetInterfaces collection, which this service does not
+                      expose.,
+                  }
+                Family: { type: string }
+                BIOSVendor: { type: string }
+                BIOSDate: { type: string }
+                BoardManufacturer: { type: string }
+                BoardProduct: { type: string }
+                BoardSerial: { type: string }
+                ProcessorManufacturer: { type: string }
+                ProcessorPartNumber: { type: string }
+                ProcessorMaxSpeedMHz: { type: integer }
+                SMBIOSVersion: { type: string, example: "3.7.0" }
         Boot:
           type: object
           properties:

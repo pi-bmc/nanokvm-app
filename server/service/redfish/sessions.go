@@ -13,15 +13,16 @@ import (
 )
 
 func (s *Service) GetSessionService(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#SessionService.v1_1_8.SessionService",
-		"@odata.id":      "/redfish/v1/SessionService",
-		"@odata.context": "/redfish/v1/$metadata#SessionService.SessionService",
-		"Id":             "SessionService",
-		"Name":           "Session Service",
-		"Sessions": gin.H{
-			"@odata.id": "/redfish/v1/SessionService/Sessions",
+	c.JSON(http.StatusOK, SessionService{
+		Resource: Resource{
+			ODataType:    "#SessionService.v1_1_8.SessionService",
+			ODataID:      sessionServicePath,
+			ODataContext: context("SessionService.SessionService"),
+			ID:           "SessionService",
+			Name:         "Session Service",
 		},
+		ServiceEnabled: true,
+		Sessions:       Link(sessionsPath),
 	})
 }
 
@@ -52,25 +53,23 @@ func (s *Service) CreateSession(c *gin.Context) {
 	log.Debugf("redfish session created for user: %s", req.UserName)
 
 	c.Header("X-Auth-Token", token)
-	c.JSON(http.StatusCreated, gin.H{
-		"@odata.type":    "#Session.v1_3_0.Session",
-		"@odata.id":      "/redfish/v1/SessionService/Sessions/" + sessionID,
-		"@odata.context": "/redfish/v1/$metadata#Session.Session",
-		"Id":             sessionID,
-		"Name":           "User Session",
-		"UserName":       req.UserName,
+	c.JSON(http.StatusCreated, Session{
+		Resource: Resource{
+			ODataType:    "#Session.v1_3_0.Session",
+			ODataID:      sessionsPath + "/" + sessionID,
+			ODataContext: context("Session.Session"),
+			ID:           sessionID,
+			Name:         "User Session",
+		},
+		UserName: req.UserName,
 	})
 }
 
 func (s *Service) GetSessionCollection(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":         "#SessionCollection.SessionCollection",
-		"@odata.id":           "/redfish/v1/SessionService/Sessions",
-		"@odata.context":      "/redfish/v1/$metadata#SessionCollection.SessionCollection",
-		"Name":                "Session Collection",
-		"Members@odata.count": 0,
-		"Members":             []gin.H{},
-	})
+	// Sessions are stateless JWTs, so the collection is always empty.
+	c.JSON(http.StatusOK, newCollection(
+		"SessionCollection", "Session Collection", sessionsPath,
+	))
 }
 
 func (s *Service) DeleteSession(c *gin.Context) {

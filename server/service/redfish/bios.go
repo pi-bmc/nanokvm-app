@@ -54,38 +54,35 @@ func (s *Service) GetBios(c *gin.Context) {
 		biosVersion = info.BIOSVersion
 	}
 
-	res := gin.H{
-		"@odata.type":       "#Bios.v1_2_0.Bios",
-		"@odata.id":         "/redfish/v1/Systems/1/Bios",
-		"@odata.context":    "/redfish/v1/$metadata#Bios.Bios",
-		"Id":                "Bios",
-		"Name":              "BIOS Configuration",
-		"Description":       "RPi 5 bootloader EEPROM configuration (bootconf.txt [all] section)",
-		"AttributeRegistry": "RPiBootloader.1",
-		"Attributes":        attrs,
+	c.JSON(http.StatusOK, Bios{
+		Resource: Resource{
+			ODataType:    "#Bios.v1_2_0.Bios",
+			ODataID:      biosPath,
+			ODataContext: context("Bios.Bios"),
+			ID:           "Bios",
+			Name:         "BIOS Configuration",
+			Description:  "RPi 5 bootloader EEPROM configuration (bootconf.txt [all] section)",
+		},
+		AttributeRegistry: "RPiBootloader.1",
+		BiosVersion:       biosVersion,
+		Attributes:        attrs,
 		// @Redfish.Settings — DMTF DSP2046 SettingsObject link. Clients
 		// PATCH /Bios/Settings to stage changes; the live Attributes
 		// here only update after the host has flashed the EEPROM and
 		// rebooted (U-Boot writes a refreshed pieeprom.bin each boot).
-		"@Redfish.Settings": gin.H{
-			"@odata.type": "#Settings.v1_3_5.Settings",
-			"SettingsObject": gin.H{
-				"@odata.id": "/redfish/v1/Systems/1/Bios/Settings",
-			},
-			"SupportedApplyTimes": []string{"OnReset"},
+		Settings: &SettingsAnnotation{
+			ODataType:           "#Settings.v1_3_5.Settings",
+			SettingsObject:      Link(biosSettingsPath),
+			SupportedApplyTimes: []string{"OnReset"},
 		},
-		"Actions": gin.H{
+		Actions: map[string]ActionTarget{
 			// We don't currently implement ResetBios (factory defaults
 			// would mean re-flashing a fresh upstream image and emptying
 			// bootconf.txt). Documented as not allowed.
-			"#Bios.ChangePassword": gin.H{
-				"target": "/redfish/v1/Systems/1/Bios/Actions/Bios.ChangePassword",
-			},
+			"#Bios.ChangePassword": {Target: biosChangePasswordURI},
 		},
-		"Links": gin.H{
-			"ActiveSoftwareImage": gin.H{
-				"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BIOS",
-			},
+		Links: Oem{
+			"ActiveSoftwareImage": Link(firmwareBIOSPath),
 		},
 		// Vendor-namespaced diagnostics — DMTF DSP0266 §6.4.13 Oem
 		// pattern. Tells an operator WHY Attributes might be empty:
@@ -93,19 +90,14 @@ func (s *Service) GetBios(c *gin.Context) {
 		// which one was actually parsed, and what section headers it
 		// contained. Critical for first-boot debugging where U-Boot
 		// hasn't written pieeprom.bin yet.
-		"Oem": gin.H{
-			"NanoKVM": gin.H{
-				"@odata.type":   "#NanoKVM.v1_0_0.Bios",
+		Oem: Oem{
+			"NanoKVM": map[string]any{
+				odataTypeKey:    "#NanoKVM.v1_0_0.Bios",
 				"Diagnostics":   diag,
 				"SourceMissing": diag.Source == "",
 			},
 		},
-	}
-	if biosVersion != "" {
-		res["BiosVersion"] = biosVersion
-	}
-
-	c.JSON(http.StatusOK, res)
+	})
 }
 
 // GetBiosSettings returns the pending bootloader configuration (if any)
@@ -136,35 +128,34 @@ func (s *Service) GetBiosSettings(c *gin.Context) {
 			"GET /redfish/v1/Systems/1/Bios for the live configuration."
 	}
 
-	res := gin.H{
-		"@odata.type":    "#Bios.v1_2_0.Bios",
-		"@odata.id":      "/redfish/v1/Systems/1/Bios/Settings",
-		"@odata.context": "/redfish/v1/$metadata#Bios.Bios",
-		"Id":             "Settings",
-		"Name":           "BIOS Pending Settings",
-		"Description":    desc,
-		"Attributes":     attrs,
-		"Pending":        pending,
+	c.JSON(http.StatusOK, Bios{
+		Resource: Resource{
+			ODataType:    "#Bios.v1_2_0.Bios",
+			ODataID:      biosSettingsPath,
+			ODataContext: context("Bios.Bios"),
+			ID:           "Settings",
+			Name:         "BIOS Pending Settings",
+			Description:  desc,
+		},
+		Attributes: attrs,
+		Pending:    &pending,
 		// Backlink to the live resource — strict Redfish doesn't define
 		// this navigation property on the SettingsObject, but it costs
 		// nothing and saves operators a doc lookup.
-		"Links": gin.H{
-			"LiveBios": gin.H{
-				"@odata.id": "/redfish/v1/Systems/1/Bios",
-			},
+		Links: Oem{
+			"LiveBios": Link(biosPath),
 		},
 		// Vendor-namespaced diagnostics — same pattern as /Bios. When
 		// Attributes is empty, this tells the caller WHY: is pieeprom.upd
 		// missing entirely, or present-but-malformed, or
 		// present-but-only-conditional-sections?
-		"Oem": gin.H{
-			"NanoKVM": gin.H{
-				"@odata.type": "#NanoKVM.v1_0_0.BiosSettings",
+		Oem: Oem{
+			"NanoKVM": map[string]any{
+				odataTypeKey:  "#NanoKVM.v1_0_0.BiosSettings",
 				"Diagnostics": diag,
 			},
 		},
-	}
-	c.JSON(http.StatusOK, res)
+	})
 }
 
 // PatchBiosSettings stages a bootloader EEPROM change. The request body's
@@ -214,27 +205,30 @@ func (s *Service) PatchBiosSettings(c *gin.Context) {
 	if pending == nil {
 		pending = map[string]string{}
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#Bios.v1_2_0.Bios",
-		"@odata.id":      "/redfish/v1/Systems/1/Bios/Settings",
-		"@odata.context": "/redfish/v1/$metadata#Bios.Bios",
-		"Id":             "Settings",
-		"Name":           "BIOS Pending Settings",
-		"Attributes":     pending,
-		"Pending":        true,
-		"Links": gin.H{
-			"LiveBios": gin.H{"@odata.id": "/redfish/v1/Systems/1/Bios"},
+	isPending := true
+	c.JSON(http.StatusOK, Bios{
+		Resource: Resource{
+			ODataType:    "#Bios.v1_2_0.Bios",
+			ODataID:      biosSettingsPath,
+			ODataContext: context("Bios.Bios"),
+			ID:           "Settings",
+			Name:         "BIOS Pending Settings",
 		},
-		"Oem": gin.H{
-			"NanoKVM": gin.H{
-				"@odata.type": "#NanoKVM.v1_0_0.BiosSettings",
+		Attributes: pending,
+		Pending:    &isPending,
+		Links: Oem{
+			"LiveBios": Link(biosPath),
+		},
+		Oem: Oem{
+			"NanoKVM": map[string]any{
+				odataTypeKey:  "#NanoKVM.v1_0_0.BiosSettings",
 				"Diagnostics": diag,
 			},
 		},
-		"@Message.ExtendedInfo": []gin.H{{
-			"MessageId": "Base.1.13.SettingsApplyTime",
-			"Message":   "Settings staged; applied on next system reset.",
-			"Severity":  "OK",
+		ExtendedInfo: []MessageInfo{{
+			MessageID: "Base.1.13.SettingsApplyTime",
+			Message:   "Settings staged; applied on next system reset.",
+			Severity:  "OK",
 		}},
 	})
 }
@@ -264,8 +258,8 @@ func (s *Service) GetBiosAttributeRegistry(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"@odata.type":     "#AttributeRegistry.v1_3_8.AttributeRegistry",
-		"@odata.id":       "/redfish/v1/Systems/1/Bios/AttributeRegistry",
-		"@odata.context":  "/redfish/v1/$metadata#AttributeRegistry.AttributeRegistry",
+		"@odata.id":       biosRegistryPath,
+		"@odata.context":  context("AttributeRegistry.AttributeRegistry"),
 		"Id":              "RPiBootloader.1",
 		"Name":            "Raspberry Pi Bootloader EEPROM Attribute Registry",
 		"Language":        "en",

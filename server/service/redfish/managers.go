@@ -5,19 +5,14 @@ import (
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 func (s *Service) GetManagerCollection(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":         "#ManagerCollection.ManagerCollection",
-		"@odata.id":           "/redfish/v1/Managers",
-		"@odata.context":      "/redfish/v1/$metadata#ManagerCollection.ManagerCollection",
-		"Name":                "Manager Collection",
-		"Members@odata.count": 1,
-		"Members": []gin.H{
-			{"@odata.id": "/redfish/v1/Managers/1"},
-		},
-	})
+	c.JSON(http.StatusOK, newCollection(
+		"ManagerCollection", "Manager Collection", managersPath,
+		Link(managerPath),
+	))
 }
 
 func (s *Service) GetManager(c *gin.Context) {
@@ -26,51 +21,30 @@ func (s *Service) GetManager(c *gin.Context) {
 		firmwareVersion = info.Main.Version
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":     "#Manager.v1_11_0.Manager",
-		"@odata.id":       "/redfish/v1/Managers/1",
-		"@odata.context":  "/redfish/v1/$metadata#Manager.Manager",
-		"Id":              "1",
-		"Name":            "NanoKVM BMC",
-		"ManagerType":     "BMC",
-		"FirmwareVersion": firmwareVersion,
-		"SerialInterfaces": gin.H{
-			"@odata.id": "/redfish/v1/Managers/1/SerialInterfaces",
+	c.JSON(http.StatusOK, Manager{
+		Resource: Resource{
+			ODataType:    "#Manager.v1_11_0.Manager",
+			ODataID:      managerPath,
+			ODataContext: context("Manager.Manager"),
+			ID:           "1",
+			Name:         "NanoKVM BMC",
 		},
-		"VirtualMedia": gin.H{
-			"@odata.id": "/redfish/v1/Managers/1/VirtualMedia",
-		},
-		"NetworkInterfaces": gin.H{
-			"@odata.id": "/redfish/v1/Managers/1/NetworkInterfaces",
-		},
-		// Links.ManagerForServers binds this BMC to the system(s) it
-		// manages. Standards-based clients (Dell terraform provider,
-		// bmclib) resolve system_id from this link when invoking actions
-		// that target a specific ComputerSystem.
-		//
-		// Links.Oem.Dell.DellAttributes points the Dell terraform provider
-		// at our fake iDRAC AttributeRegistry. The provider hard-codes a
-		// Dell.Manager() unmarshal whose generation check (sub-17G vs
-		// 17G+) gates the boot-source-override code path; we report 14G
-		// so the standard PATCH /Systems/1 path is used.
-		"Links": gin.H{
-			"ManagerForServers": []gin.H{
-				{"@odata.id": "/redfish/v1/Systems/1"},
-			},
-			"Oem": gin.H{
-				"Dell": gin.H{
-					"DellAttributes": []gin.H{
-						{"@odata.id": "/redfish/v1/Managers/1/Oem/Dell/DellAttributes/iDRAC.Embedded.1"},
-					},
+		ManagerType:       schemas.BMCManagerType,
+		FirmwareVersion:   firmwareVersion,
+		Status:            &Status{State: schemas.EnabledState, Health: schemas.OKHealth},
+		SerialInterfaces:  Link(serialInterfacesPath),
+		VirtualMedia:      Link(virtualMediaPath),
+		NetworkInterfaces: Link(networkInterfacesPath),
+		Links: ManagerLinks{
+			ManagerForServers: Links{Link(systemPath)},
+			Oem: Oem{
+				"Dell": map[string]any{
+					"DellAttributes": Links{Link(dellAttributesPath)},
 				},
 			},
 		},
-		// Empty Oem/Actions.Oem keep gofish's dell.Manager() unmarshal
-		// from erroring on "unexpected end of JSON input" — the wrapper
-		// json.Unmarshal's the raw bytes of each field and aborts when
-		// they're absent rather than `{}`.
-		"Oem":     gin.H{"Dell": gin.H{}},
-		"Actions": gin.H{"Oem": gin.H{}},
+		Oem:     Oem{"Dell": map[string]any{}},
+		Actions: Oem{"Oem": map[string]any{}},
 	})
 }
 
@@ -80,9 +54,9 @@ func (s *Service) GetManager(c *gin.Context) {
 // path (sub-17G) rather than the 17G Settings-URI flow we don't have.
 func (s *Service) GetDellIDRACAttributes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":       "#DellAttributes.v1_0_0.DellAttributes",
-		"@odata.id":         "/redfish/v1/Managers/1/Oem/Dell/DellAttributes/iDRAC.Embedded.1",
-		"@odata.context":    "/redfish/v1/$metadata#DellAttributes.DellAttributes",
+		odataTypeKey:        "#DellAttributes.v1_0_0.DellAttributes",
+		"@odata.id":         dellAttributesPath,
+		"@odata.context":    context("DellAttributes.DellAttributes"),
 		"Id":                "iDRAC.Embedded.1",
 		"Name":              "iDRAC Attributes",
 		"AttributeRegistry": "ManagerAttributeRegistry.v1_0_0",

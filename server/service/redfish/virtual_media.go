@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	"github.com/stmcginnis/gofish/schemas"
 
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 )
@@ -51,16 +52,10 @@ type insertMediaRequest struct {
 
 // GetVirtualMediaCollection returns the VirtualMedia collection for Manager/1.
 func (s *Service) GetVirtualMediaCollection(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":         "#VirtualMediaCollection.VirtualMediaCollection",
-		"@odata.id":           "/redfish/v1/Managers/1/VirtualMedia",
-		"@odata.context":      "/redfish/v1/$metadata#VirtualMediaCollection.VirtualMediaCollection",
-		"Name":                "Virtual Media Collection",
-		"Members@odata.count": 1,
-		"Members": []gin.H{
-			{"@odata.id": "/redfish/v1/Managers/1/VirtualMedia/CD"},
-		},
-	})
+	c.JSON(http.StatusOK, newCollection(
+		"VirtualMediaCollection", "Virtual Media Collection", virtualMediaPath,
+		Link(virtualMediaCDPath),
+	))
 }
 
 // GetVirtualMedia returns the single VirtualMedia resource (slot 1).
@@ -245,19 +240,19 @@ func (s *Service) EjectMedia(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func buildVirtualMediaResource() gin.H {
+func buildVirtualMediaResource() VirtualMedia {
 	fwCtrl := firmware.GetController()
 	vm := fwCtrl.GetVirtualMediaState()
 
 	// ConnectedVia is a single Redfish enum string (NotConnected, URI,
 	// Applet, Oem). Not an array — gofish unmarshal will reject [].
-	connectedVia := "NotConnected"
-	insertedMedia := gin.H{}
+	connectedVia := schemas.NotConnectedConnectedVia
+	var insertedMedia *InsertedMedia
 	if vm.Inserted {
-		connectedVia = "URI"
-		insertedMedia = gin.H{
-			"ImageName":     vm.ImageName,
-			"CapacityBytes": vm.ImageSize,
+		connectedVia = schemas.URIConnectedVia
+		insertedMedia = &InsertedMedia{
+			ImageName:     vm.ImageName,
+			CapacityBytes: vm.ImageSize,
 		}
 	}
 
@@ -267,33 +262,29 @@ func buildVirtualMediaResource() gin.H {
 	image := lastTransfer.Image
 	lastTransfer.Unlock()
 
-	return gin.H{
-		"@odata.type":          "#VirtualMedia.v1_3_0.VirtualMedia",
-		"@odata.id":            "/redfish/v1/Managers/1/VirtualMedia/CD",
-		"@odata.context":       "/redfish/v1/$metadata#VirtualMedia.VirtualMedia",
-		"Id":                   "CD",
-		"Name":                 "Virtual Removable Media",
-		"MediaTypes":           []string{"CD"},
-		"MediaType":            "CD",
-		"ConnectedVia":         connectedVia,
-		"Inserted":             vm.Inserted,
-		"WriteProtected":       true,
-		"InsertedMedia":        insertedMedia,
-		"Image":                image,
-		"TransferMethod":       method,
-		"TransferProtocolType": protocol,
-		"Links": gin.H{
-			"Systems": []gin.H{
-				{"@odata.id": "/redfish/v1/Systems/1"},
-			},
+	return VirtualMedia{
+		Resource: Resource{
+			ODataType:    "#VirtualMedia.v1_3_0.VirtualMedia",
+			ODataID:      virtualMediaCDPath,
+			ODataContext: context("VirtualMedia.VirtualMedia"),
+			ID:           "CD",
+			Name:         "Virtual Removable Media",
 		},
-		"Actions": gin.H{
-			"#VirtualMedia.InsertMedia": gin.H{
-				"target": "/redfish/v1/Managers/1/VirtualMedia/CD/Actions/VirtualMedia.InsertMedia",
-			},
-			"#VirtualMedia.EjectMedia": gin.H{
-				"target": "/redfish/v1/Managers/1/VirtualMedia/CD/Actions/VirtualMedia.EjectMedia",
-			},
+		MediaTypes:           []schemas.VirtualMediaType{schemas.CDVirtualMediaType},
+		MediaType:            schemas.CDVirtualMediaType,
+		ConnectedVia:         connectedVia,
+		Inserted:             vm.Inserted,
+		WriteProtected:       true,
+		InsertedMedia:        insertedMedia,
+		Image:                image,
+		TransferMethod:       schemas.TransferMethod(method),
+		TransferProtocolType: schemas.VirtualMediaTransferProtocolType(protocol),
+		Links: VirtualMediaLinks{
+			Systems: Links{Link(systemPath)},
+		},
+		Actions: VirtualMediaActions{
+			InsertMedia: ActionTarget{Target: virtualMediaCDPath + "/Actions/VirtualMedia.InsertMedia"},
+			EjectMedia:  ActionTarget{Target: virtualMediaCDPath + "/Actions/VirtualMedia.EjectMedia"},
 		},
 	}
 }

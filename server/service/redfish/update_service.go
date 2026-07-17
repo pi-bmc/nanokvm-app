@@ -10,46 +10,39 @@ import (
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	"github.com/stmcginnis/gofish/schemas"
 
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 )
 
 // GetUpdateService returns the UpdateService root.
 func (s *Service) GetUpdateService(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":    "#UpdateService.v1_11_0.UpdateService",
-		"@odata.id":      "/redfish/v1/UpdateService",
-		"@odata.context": "/redfish/v1/$metadata#UpdateService.UpdateService",
-		"Id":             "UpdateService",
-		"Name":           "Update Service",
-		"ServiceEnabled": true,
-		"FirmwareInventory": gin.H{
-			"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+	c.JSON(http.StatusOK, UpdateService{
+		Resource: Resource{
+			ODataType:    "#UpdateService.v1_11_0.UpdateService",
+			ODataID:      updateServicePath,
+			ODataContext: context("UpdateService.UpdateService"),
+			ID:           "UpdateService",
+			Name:         "Update Service",
 		},
-		"Actions": gin.H{
-			"#UpdateService.SimpleUpdate": gin.H{
-				"target": "/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate",
-				"TransferProtocol@Redfish.AllowableValues": []string{"HTTPS"},
+		ServiceEnabled:    true,
+		FirmwareInventory: Link(firmwareInventoryPath),
+		Actions: UpdateServiceActions{
+			SimpleUpdate: SimpleUpdateAction{
+				Target:                    simpleUpdatePath,
+				AllowableTransferProtocol: []string{"HTTPS"},
 			},
-			"#UpdateService.StartUpdate": gin.H{
-				"target": "/redfish/v1/UpdateService/Actions/UpdateService.StartUpdate",
-			},
+			StartUpdate: ActionTarget{Target: startUpdatePath},
 		},
 	})
 }
 
 // GetFirmwareInventoryCollection returns the firmware inventory collection.
 func (s *Service) GetFirmwareInventoryCollection(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"@odata.type":         "#SoftwareInventoryCollection.SoftwareInventoryCollection",
-		"@odata.id":           "/redfish/v1/UpdateService/FirmwareInventory",
-		"@odata.context":      "/redfish/v1/$metadata#SoftwareInventoryCollection.SoftwareInventoryCollection",
-		"Name":                "Firmware Inventory Collection",
-		"Members@odata.count": 1,
-		"Members": []gin.H{
-			{"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BIOS"},
-		},
-	})
+	c.JSON(http.StatusOK, newCollection(
+		"SoftwareInventoryCollection", "Firmware Inventory Collection", firmwareInventoryPath,
+		Link(firmwareBIOSPath),
+	))
 }
 
 // GetFirmwareInventoryUBoot returns the U-Boot firmware inventory entry
@@ -61,33 +54,34 @@ func (s *Service) GetFirmwareInventoryUBoot(c *gin.Context) {
 	if current == "" {
 		current = "Unknown"
 	}
-	resp := gin.H{
-		"@odata.type":    "#SoftwareInventory.v1_8_0.SoftwareInventory",
-		"@odata.id":      "/redfish/v1/UpdateService/FirmwareInventory/BIOS",
-		"@odata.context": "/redfish/v1/$metadata#SoftwareInventory.SoftwareInventory",
-		"Id":             "BIOS",
-		"Name":           "BIOS (U-Boot)",
-		"SoftwareId":     "U-Boot",
-		"Version":        current,
-		"Updateable":     true,
-		"Status": gin.H{
-			"State":  "Enabled",
-			"Health": "OK",
+
+	description := "U-Boot bootloader firmware"
+	if err != nil {
+		description += " (latest-version lookup failed: " + err.Error() + ")"
+	}
+
+	resp := SoftwareInventory{
+		Resource: Resource{
+			ODataType:    "#SoftwareInventory.v1_8_0.SoftwareInventory",
+			ODataID:      firmwareBIOSPath,
+			ODataContext: context("SoftwareInventory.SoftwareInventory"),
+			ID:           "BIOS",
+			Name:         "BIOS (U-Boot)",
+			Description:  description,
 		},
+		SoftwareID: "U-Boot",
+		Version:    current,
+		Updateable: true,
+		Status:     &Status{State: schemas.EnabledState, Health: schemas.OKHealth},
 	}
 	if info.Latest != "" {
-		resp["Oem"] = gin.H{
-			"BMCPi": gin.H{
+		resp.Oem = Oem{
+			"BMCPi": map[string]any{
 				"LatestVersion":   info.Latest,
 				"UpdateAvailable": info.UpdateAvailable,
 				"AssetURL":        info.AssetURL,
 			},
 		}
-	}
-	if err != nil {
-		resp["Description"] = "U-Boot bootloader firmware (latest-version lookup failed: " + err.Error() + ")"
-	} else {
-		resp["Description"] = "U-Boot bootloader firmware"
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -120,10 +114,11 @@ func (s *Service) SimpleUpdate(c *gin.Context) {
 		}
 	}(req.ImageURI)
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"@odata.type": "#Message.v1_1_0.Message",
-		"MessageId":   "Update.1.0.UpdateInProgress",
-		"Message":     "U-Boot update started",
+	c.JSON(http.StatusAccepted, Message{
+		ODataType: "#Message.v1_1_0.Message",
+		MessageID: "Update.1.0.UpdateInProgress",
+		Message:   "U-Boot update started",
+		Severity:  "OK",
 	})
 }
 
@@ -140,9 +135,10 @@ func (s *Service) StartUpdate(c *gin.Context) {
 			log.Errorf("redfish: u-boot update failed: %v", err)
 		}
 	}()
-	c.JSON(http.StatusAccepted, gin.H{
-		"@odata.type": "#Message.v1_1_0.Message",
-		"MessageId":   "Update.1.0.UpdateInProgress",
-		"Message":     "U-Boot update started",
+	c.JSON(http.StatusAccepted, Message{
+		ODataType: "#Message.v1_1_0.Message",
+		MessageID: "Update.1.0.UpdateInProgress",
+		Message:   "U-Boot update started",
+		Severity:  "OK",
 	})
 }

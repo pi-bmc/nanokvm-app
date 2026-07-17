@@ -15,6 +15,7 @@ require (
 	github.com/siderolabs/go-smbios v0.3.4
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/viper v1.21.0
+	github.com/stmcginnis/gofish v0.23.0
 	github.com/templui/templui v1.11.2
 	github.com/ulikunitz/xz v0.5.15
 	github.com/unrolled/secure v1.17.0
