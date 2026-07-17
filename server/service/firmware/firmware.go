@@ -12,23 +12,24 @@ package firmware
 //     fn → sync → umount → drop_caches → present. No persistent loop device
 //     is maintained; the kernel handles loop attachment internally as part of
 //     `mount -o loop,offset=...`.
-//   - Env reads are served from a small in-memory snapshot cache with a
-//     short TTL so dashboard polling does not trigger a mount per request.
-//     The cache is invalidated explicitly by every write method.
+//   - The U-Boot environment is NOT part of the image: it lives in a region
+//     of the I2C EEPROM (the host's CONFIG_ENV_IS_IN_EEPROM partition, see
+//     ubootenv.Store on c.env), so the BMC and U-Boot read and write the same
+//     bytes and an image update never disturbs it. This replaced the earlier
+//     machine.env / persistent.env / once.env files in the FAT image.
 //   - c.firmwareDir is a host-side staging area mirroring files we want
 //     to push into the image. SyncFirmwareDirToImage copies its contents
 //     over the mounted image.
 
 import (
-	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pi-bmc/nanokvm-app/server/config"
+	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
 	"github.com/pi-bmc/nanokvm-app/server/service/ubootenv"
 )
 
@@ -43,13 +44,6 @@ type Status struct {
 	FirmwareCount int    `json:"firmwareCount"`
 }
 
-// envSnapshot is a parsed view of all env files at one point in time.
-type envSnapshot struct {
-	machine    *ubootenv.Env
-	persistent *ubootenv.Env
-	once       *ubootenv.Env
-}
-
 // Controller manages the firmware image lifecycle.
 type Controller struct {
 	mu sync.Mutex
@@ -60,10 +54,11 @@ type Controller struct {
 	firmwareDir string
 	mediaDir    string // staging area for ISO files the user has uploaded
 
-	// Host-OS paths for the U-Boot env files inside the FAT image.
-	machineEnv    string // read: effective env written by U-Boot at boot
-	persistentEnv string // write: applied on every boot
-	onceEnv       string // write: applied on next boot then deleted
+	// env is the U-Boot environment. It lives in a region of the I2C EEPROM
+	// (the host's CONFIG_ENV_IS_IN_EEPROM partition), not in files inside the
+	// boot image, so the BMC and U-Boot read and write the same bytes.
+	// nil when unconfigured.
+	env *ubootenv.Store
 
 	presented bool
 
@@ -81,17 +76,42 @@ func GetController() *Controller {
 	once.Do(func() {
 		cfg := config.GetInstance()
 		instance = &Controller{
-			imageURL:      cfg.Firmware.ImageURL,
-			imagePath:     cfg.Firmware.ImagePath,
-			mountPoint:    cfg.Firmware.MountPoint,
-			firmwareDir:   cfg.Firmware.FirmwareDir,
-			mediaDir:      cfg.Firmware.MediaDir,
-			machineEnv:    cfg.Firmware.MachineEnv,
-			persistentEnv: cfg.Firmware.PersistentEnv,
-			onceEnv:       cfg.Firmware.OnceEnv,
+			imageURL:    cfg.Firmware.ImageURL,
+			imagePath:   cfg.Firmware.ImagePath,
+			mountPoint:  cfg.Firmware.MountPoint,
+			firmwareDir: cfg.Firmware.FirmwareDir,
+			mediaDir:    cfg.Firmware.MediaDir,
 		}
+		instance.env = newEnvStore(cfg.UbootEnv)
 	})
 	return instance
+}
+
+// newEnvStore builds the EEPROM-backed U-Boot environment store from config.
+// The environment occupies [Offset, Offset+Size) of the same EEPROM that
+// holds the UEFI variable store, so the backend spans up to the end of the
+// env region. Returns nil when the store is disabled or unconfigured.
+func newEnvStore(cfg config.UbootEnv) *ubootenv.Store {
+	if !cfg.Enabled {
+		return nil
+	}
+	// The efivars backends address the device with absolute offsets and match
+	// ubootenv.Backend structurally, so both stores share one EEPROM device.
+	var b ubootenv.Backend
+	switch {
+	case cfg.Path != "":
+		b = efivars.NewFileBackend(cfg.Path, cfg.Offset+cfg.Size)
+		log.Infof("ubootenv: using file store %s at offset %#x", cfg.Path, cfg.Offset)
+	case cfg.I2CBus >= 0:
+		b = efivars.NewI2CBackend(cfg.I2CBus, uint16(cfg.I2CAddr), //nolint:gosec // 7-bit address
+			cfg.PageSize, cfg.Offset+cfg.Size)
+		log.Infof("ubootenv: using i2c store bus %d addr %#x at offset %#x",
+			cfg.I2CBus, cfg.I2CAddr, cfg.Offset)
+	default:
+		log.Warn("ubootenv: enabled but neither path nor i2c bus configured")
+		return nil
+	}
+	return ubootenv.NewStore(b, cfg.Offset, cfg.Size, cfg.SnapshotPath)
 }
 
 // Init ensures an image exists (downloading if missing), attaches the
@@ -119,11 +139,9 @@ func (c *Controller) Init() error {
 		log.Warnf("firmware: USB gadget present failed (may not be available in this environment): %v", err)
 	}
 
-	// Ensure a default empty machine.env exists in the image so U-Boot has
-	// somewhere to persist saveenv writes. Best-effort.
-	if err := c.ensureUbootEnvLocked(); err != nil {
-		log.Warnf("firmware: ensure default machine.env: %v", err)
-	}
+	// Reconcile the durable env snapshot against the (volatile) EEPROM and
+	// start watching for host-side saveenv writes. Best-effort.
+	c.env.StartPersistence()
 	return nil
 }
 
@@ -157,148 +175,105 @@ func (c *Controller) imageExists() bool {
 	return err == nil && info.Size() > 0
 }
 
-// ---- env file helpers (host-FS paths under c.mountPoint) -------------------
-
-// loadEnvFile reads and parses a U-Boot env file from the (mounted) image.
-// Returns an empty Env when the file does not exist.
-func loadEnvFile(path string) (*ubootenv.Env, error) {
-	env, err := ubootenv.LoadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return ubootenv.New(), nil
-		}
-		return nil, err
-	}
-	return env, nil
-}
-
-// saveOrRemoveEnv writes env to path, or deletes the file if env has no
-// variables (so U-Boot doesn't try to import an empty file).
-func saveOrRemoveEnv(env *ubootenv.Env, path string) error {
-	if len(env.Vars) == 0 {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove %s: %w", path, err)
-		}
-		return nil
-	}
-	return env.SaveFile(path)
-}
-
-// ---- env snapshot (cache-free, page-cache-coherent reads) ----------------
-
-// envSnapshotLocked reads all three env files from the image without mounting.
-// Each call is a fresh read via the userspace FAT parser. Must hold c.mu.
-func (c *Controller) envSnapshotLocked() (*envSnapshot, error) {
-	snap := &envSnapshot{}
-	var err error
-	if snap.machine, err = c.loadEnvFresh(c.machineEnv); err != nil {
-		return nil, fmt.Errorf("load machine env: %w", err)
-	}
-	if snap.persistent, err = c.loadEnvFresh(c.persistentEnv); err != nil {
-		return nil, fmt.Errorf("load persistent env: %w", err)
-	}
-	if snap.once, err = c.loadEnvFresh(c.onceEnv); err != nil {
-		return nil, fmt.Errorf("load once env: %w", err)
-	}
-	return snap, nil
-}
-
 // ---- env API ---------------------------------------------------------------
 
-// LoadEnv returns machine.env (written by U-Boot at last boot). Fresh read.
+// LoadEnv returns the U-Boot environment read from the EEPROM. It is the
+// effective environment: U-Boot reads the same bytes at boot and rewrites
+// them on saveenv.
 func (c *Controller) LoadEnv() (*ubootenv.Env, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.loadEnvFresh(c.machineEnv)
+	return c.env.Load()
 }
 
-// BootTargets bundles the three boot-target views read from the image.
+// BootTargets bundles the boot-target views.
+//
+// The environment is a single store now that it lives in the EEPROM, so
+// Persistent and Effective are the same boot_targets value — U-Boot reads the
+// bytes the BMC wrote. Once is not an environment concept: one-shot overrides
+// are UEFI BootNext, owned by the efivars store.
 type BootTargets struct {
-	Persistent string `json:"persistent"` // from persistent.env
-	Once       string `json:"once"`       // from once.env
-	Effective  string `json:"effective"`  // from machine.env
+	Persistent string `json:"persistent"` // boot_targets in the EEPROM env
+	Once       string `json:"once"`       // pending UEFI BootNext, if any
+	Effective  string `json:"effective"`  // boot_targets in the EEPROM env
 }
 
-// GetBootTargets returns persistent, once, and effective boot targets in
-// a single fresh read.
+// GetBootTargets returns the persistent/effective boot_targets from the
+// environment plus any pending one-shot UEFI BootNext.
 func (c *Controller) GetBootTargets() (BootTargets, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	snap, err := c.envSnapshotLocked()
+	env, err := c.LoadEnv()
 	if err != nil {
 		return BootTargets{}, err
 	}
-	bt := BootTargets{}
-	bt.Persistent, _ = snap.persistent.Get(ubootenv.VarBootTargets)
-	bt.Once, _ = snap.once.Get(ubootenv.VarBootTargets)
-	bt.Effective, _ = snap.machine.Get(ubootenv.VarBootTargets)
+	targets, _ := env.Get(ubootenv.VarBootTargets)
+	bt := BootTargets{Persistent: targets, Effective: targets}
+	bt.Once = pendingBootNextTarget()
 	return bt, nil
 }
 
-// GetBootTarget returns boot_targets from persistent.env. Fresh read.
+// pendingBootNextTarget reports a pending UEFI BootNext as a U-Boot
+// boot_targets value, or "" when there is none (or no variable store).
+func pendingBootNextTarget() string {
+	mgr := efivars.GetManager()
+	if !mgr.Available() {
+		return ""
+	}
+	target, enabled, err := mgr.BootSourceOverride()
+	if err != nil || enabled != "Once" || target == efivars.TargetUnknown {
+		return ""
+	}
+	return RedfishToUBoot[string(target)]
+}
+
+// GetBootTarget returns the persistent boot_targets from the environment.
 func (c *Controller) GetBootTarget() (string, error) {
 	bt, err := c.GetBootTargets()
 	return bt.Persistent, err
 }
 
-// GetOnceBootTarget returns boot_targets from once.env. Fresh read.
+// GetOnceBootTarget returns the pending one-shot boot target (UEFI BootNext).
 func (c *Controller) GetOnceBootTarget() (string, error) {
 	bt, err := c.GetBootTargets()
 	return bt.Once, err
 }
 
-// GetEffectiveBootTarget returns boot_targets from machine.env. Fresh read.
+// GetEffectiveBootTarget returns the effective boot_targets from the
+// environment.
 func (c *Controller) GetEffectiveBootTarget() (string, error) {
 	bt, err := c.GetBootTargets()
 	return bt.Effective, err
 }
 
-// SetBootTarget writes a persistent boot target override to persistent.env
-// inside the firmware image.
+// SetBootTarget writes a persistent boot_targets override to the environment
+// in the EEPROM. An empty value clears it.
 func (c *Controller) SetBootTarget(targets string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	defer c.invalidateReaderCacheLocked()
-
-	return c.withMount(func() error {
-		// Derive the path inside the mounted image, not the host firmwareDir.
-		dest := filepath.Join(c.mountPoint, filepath.Base(c.persistentEnv))
-		env, err := loadEnvFile(dest)
-		if err != nil {
-			return fmt.Errorf("load persistent env: %w", err)
-		}
+	return c.env.Update(func(env *ubootenv.Env) {
 		if targets == "" {
 			env.Delete(ubootenv.VarBootTargets)
-		} else {
-			env.Set(ubootenv.VarBootTargets, targets)
+			return
 		}
-		return saveOrRemoveEnv(env, dest)
+		env.Set(ubootenv.VarBootTargets, targets)
 	})
 }
 
-// SetBootTargetOnce writes a one-shot boot target override to once.env
-// inside the firmware image.
+// SetBootTargetOnce applies a one-shot boot override. The environment has no
+// apply-once semantics, so this drives UEFI BootNext through the variable
+// store — the mechanism the host actually honours (bootcmd is `bootefi
+// bootmgr`). An empty value clears any pending override.
 func (c *Controller) SetBootTargetOnce(targets string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	defer c.invalidateReaderCacheLocked()
-
-	return c.withMount(func() error {
-		dest := filepath.Join(c.mountPoint, filepath.Base(c.onceEnv))
-		env, err := loadEnvFile(dest)
-		if err != nil {
-			return fmt.Errorf("load once env: %w", err)
-		}
-		if targets == "" {
-			env.Delete(ubootenv.VarBootTargets)
-		} else {
-			env.Set(ubootenv.VarBootTargets, targets)
-		}
-		return saveOrRemoveEnv(env, dest)
-	})
+	mgr := efivars.GetManager()
+	if !mgr.Available() {
+		return fmt.Errorf("one-shot boot override requires the UEFI variable store")
+	}
+	if targets == "" {
+		return mgr.ClearBootSourceOverride()
+	}
+	rf, ok := UBootToRedfish[targets]
+	if !ok {
+		return fmt.Errorf("no UEFI boot target for boot_targets %q", targets)
+	}
+	return mgr.SetBootSourceOverride(efivars.BootTarget(rf), true)
 }
 
-// GetInventory returns board inventory data from machine.env. Fresh read.
+// GetInventory returns board inventory data from the environment. Fresh read.
 func (c *Controller) GetInventory() (map[string]string, error) {
 	env, err := c.LoadEnv()
 	if err != nil {

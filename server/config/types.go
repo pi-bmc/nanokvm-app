@@ -17,6 +17,7 @@ type Config struct {
 	Serial         Serial   `yaml:"serial"`
 	Firmware       Firmware `yaml:"firmware"`
 	EfiVars        EfiVars  `yaml:"efiVars"`
+	UbootEnv       UbootEnv `yaml:"ubootEnv"`
 
 	Power      Power      `yaml:"power"`
 	Telemetry  Telemetry  `yaml:"telemetry"`
@@ -164,9 +165,13 @@ type Firmware struct {
 	// MountPoint is retained for backward-compat with existing YAML files but
 	// is no longer used at runtime — env paths are derived as FAT-root names.
 	MountPoint    string `yaml:"mountPoint"`
-	MachineEnv    string `yaml:"machineEnv"`    // read: effective env written by U-Boot
-	PersistentEnv string `yaml:"persistentEnv"` // write: applied every boot
-	OnceEnv       string `yaml:"onceEnv"`       // write: applied once then deleted
+	// MachineEnv, PersistentEnv and OnceEnv are retained for backward-compat
+	// with existing YAML files but are no longer used at runtime: the U-Boot
+	// environment lives in the I2C EEPROM (see UbootEnv), not in files inside
+	// the boot image.
+	MachineEnv    string `yaml:"machineEnv"`
+	PersistentEnv string `yaml:"persistentEnv"`
+	OnceEnv       string `yaml:"onceEnv"`
 	// MediaDir is the directory where ISO images for virtual media are stored.
 	MediaDir string `yaml:"mediaDir"`
 }
@@ -198,5 +203,41 @@ type EfiVars struct {
 	// startup and re-saves it whenever the host (or the BMC) changes the
 	// store, so BootOrder/BootNext survive BMC reboots. Empty disables
 	// persistence.
+	SnapshotPath string `yaml:"snapshotPath"`
+}
+
+// UbootEnv configures where the U-Boot environment lives. U-Boot
+// (CONFIG_ENV_IS_IN_EEPROM) keeps it at a fixed offset of the *same* EEPROM
+// that holds the UEFI variable store, so this mirrors EfiVars' access fields
+// and adds the region within the device:
+//
+//	0x0000..0x3fff  UEFI variable blob (EfiVars)
+//	0x4000..0x7fff  U-Boot environment (this store)
+type UbootEnv struct {
+	// Enabled gates the subsystem; when false the environment API reports the
+	// store as unavailable.
+	Enabled bool `yaml:"enabled"`
+	// Path is a file-backed store: the backing file of a kernel
+	// i2c-slave-eeprom device (BMC emulating the EEPROM), an at24 sysfs
+	// eeprom node, or a plain file for testing. Takes precedence over I2CBus.
+	Path string `yaml:"path"`
+	// I2CBus selects raw /dev/i2c-N master access when Path is empty.
+	// Set to -1 to disable.
+	I2CBus int `yaml:"i2cBus"`
+	// I2CAddr is the EEPROM chip address (default 0x50).
+	I2CAddr int `yaml:"i2cAddr"`
+	// PageSize is the EEPROM write page size in bytes (default 64, 24c256).
+	PageSize int `yaml:"pageSize"`
+	// Offset is where the env partition starts in the EEPROM. Must match the
+	// host's CONFIG_ENV_OFFSET (default 0x4000).
+	Offset int `yaml:"offset"`
+	// Size is the env partition size, including its CRC32 header. Must match
+	// the host's CONFIG_ENV_SIZE (default 0x4000).
+	Size int `yaml:"size"`
+	// SnapshotPath is a durable file mirroring the env region. The kernel
+	// i2c-slave-eeprom backing the EEPROM is volatile RAM wiped on every BMC
+	// reboot; the app restores this snapshot at startup and re-saves it
+	// whenever the host (saveenv) or the BMC changes the environment, so it
+	// survives BMC reboots. Empty disables persistence.
 	SnapshotPath string `yaml:"snapshotPath"`
 }

@@ -163,6 +163,15 @@ func (e *Env) SaveFile(path string) error {
 	return nil
 }
 
+// clone returns a deep copy, so callers cannot mutate a Store's cached env.
+func (e *Env) clone() *Env {
+	vars := make(map[string]string, len(e.Vars))
+	for k, v := range e.Vars {
+		vars[k] = v
+	}
+	return &Env{Vars: vars, Format: e.Format, Size: e.Size}
+}
+
 // Get returns the value of a variable and whether it exists.
 func (e *Env) Get(key string) (string, bool) {
 	v, ok := e.Vars[key]

@@ -1,8 +1,9 @@
 package firmware
 
-// update.go orchestrates u-boot firmware updates: query latest release,
-// determine if an update is needed, download the new image while
-// preserving env files (machine.env, import.env) from the existing image.
+// update.go orchestrates u-boot firmware updates: query the latest release,
+// determine whether an update is needed, and download/activate the new image.
+// The U-Boot environment lives in the I2C EEPROM (see ubootenv.Store), which
+// an image swap does not touch, so no env files are carried across updates.
 
 import (
 	"errors"
@@ -11,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -27,21 +27,15 @@ type VersionInfo struct {
 	AssetURL        string `json:"assetUrl,omitempty"`
 }
 
-// envFileFATPaths are the FAT root-relative paths of env files we
-// preserve across firmware updates.
-var envFileFATPaths = []string{"/machine.env", "/persistent.env", "/once.env"}
-
 // GetUBootVersionInfo returns the currently-running u-boot version (read
-// from machine.env's `ver` variable) and the latest available release.
+// from the environment's `ver` variable) and the latest available release.
 func (c *Controller) GetUBootVersionInfo() (VersionInfo, error) {
-	c.mu.Lock()
 	current := ""
-	if env, err := c.loadEnvFresh(c.machineEnv); err == nil {
+	if env, err := c.LoadEnv(); err == nil {
 		if v, ok := env.Get("ver"); ok {
 			current = parseUBootVer(v)
 		}
 	}
-	c.mu.Unlock()
 
 	info := VersionInfo{Current: current}
 	rel, err := LatestUBootRelease()
@@ -104,47 +98,10 @@ func (c *Controller) UpdateUBootFromURL(url string) error {
 		return fmt.Errorf("empty url")
 	}
 
-	// 1. Snapshot env files from the existing image (best-effort).
-	preserved := make(map[string][]byte)
-	if c.imageExists() {
-		for _, p := range envFileFATPaths {
-			data, err := c.readFileFresh(p)
-			if err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					log.Warnf("firmware: pre-update read %s failed: %v", p, err)
-				}
-				continue
-			}
-			preserved[p] = data
-			log.Debugf("firmware: preserved %s (%d bytes)", p, len(data))
-		}
-	}
-
-	// 2. Download & install the new image (replaces c.imagePath atomically).
-	if err := c.downloadFromURLLocked(url); err != nil {
-		return err
-	}
-
-	// 3. Restore preserved env files into the new image.
-	if len(preserved) > 0 {
-		if err := c.withMount(func() error {
-			for fatPath, data := range preserved {
-				dest := filepath.Join(c.mountPoint, filepath.FromSlash(strings.TrimPrefix(fatPath, "/")))
-				if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-					return fmt.Errorf("mkdir %s: %w", filepath.Dir(dest), err)
-				}
-				if err := os.WriteFile(dest, data, 0o644); err != nil {
-					return fmt.Errorf("restore %s: %w", dest, err)
-				}
-				log.Infof("firmware: restored %s (%d bytes)", path.Base(fatPath), len(data))
-			}
-			return nil
-		}); err != nil {
-			log.Warnf("firmware: env restore failed: %v", err)
-			return fmt.Errorf("restore envs: %w", err)
-		}
-	}
-	return nil
+	// Download & install the new image (replaces c.imagePath atomically). The
+	// U-Boot environment lives in the EEPROM, which an image swap does not
+	// touch, so nothing has to be preserved across the update.
+	return c.downloadFromURLLocked(url)
 }
 
 // downloadFromURLLocked is identical to downloadImageLocked but takes an
@@ -380,52 +337,18 @@ func (c *Controller) ActivateVersionedImage(version string) error {
 		return fmt.Errorf("versioned image for %s not found; download it first", version)
 	}
 
-	// 1. Snapshot env files from the current active image (best-effort).
-	preserved := make(map[string][]byte)
-	if c.imageExists() {
-		for _, p := range envFileFATPaths {
-			data, err := c.readFileFresh(p)
-			if err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					log.Warnf("firmware: pre-activate read %s: %v", p, err)
-				}
-				continue
-			}
-			preserved[p] = data
-			log.Debugf("firmware: preserved %s (%d bytes)", p, len(data))
-		}
-	}
-
-	// 2. Swap the versioned image into the active slot.
+	// Swap the versioned image into the active slot. The U-Boot environment
+	// lives in the EEPROM, which the swap does not touch, so nothing has to be
+	// preserved across the activation.
 	if err := c.swapActiveLocked(srcPath); err != nil {
 		return err
-	}
-
-	// 3. Restore env files into the new active image.
-	if len(preserved) > 0 {
-		if err := c.withMount(func() error {
-			for fatPath, data := range preserved {
-				dest := filepath.Join(c.mountPoint, filepath.FromSlash(strings.TrimPrefix(fatPath, "/")))
-				if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-					return fmt.Errorf("mkdir %s: %w", filepath.Dir(dest), err)
-				}
-				if err := os.WriteFile(dest, data, 0o644); err != nil {
-					return fmt.Errorf("restore %s: %w", dest, err)
-				}
-				log.Infof("firmware: restored %s (%d bytes)", path.Base(fatPath), len(data))
-			}
-			return nil
-		}); err != nil {
-			log.Warnf("firmware: env restore after activate failed: %v", err)
-			return fmt.Errorf("restore envs: %w", err)
-		}
 	}
 
 	log.Infof("firmware: activated versioned image %s → %s", version, c.imagePath)
 
 	// Persist the activated version so the kernels endpoint can report the
-	// correct active entry even before the board reboots (machine.env still
-	// contains the old U-Boot ver string at this point).
+	// correct active entry even before the board reboots (the environment
+	// still holds the old U-Boot ver string at this point).
 	trackFile := filepath.Join(filepath.Dir(c.imagePath), ".activated-uboot-version")
 	if err := os.WriteFile(trackFile, []byte(version), 0o644); err != nil {
 		log.Warnf("firmware: write activated-version tracking file: %v", err)

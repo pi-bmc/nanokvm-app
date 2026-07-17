@@ -40,8 +40,6 @@ import (
 	diskfs "github.com/diskfs/go-diskfs"
 	"github.com/diskfs/go-diskfs/disk"
 	"github.com/diskfs/go-diskfs/filesystem"
-
-	"github.com/pi-bmc/nanokvm-app/server/service/ubootenv"
 )
 
 // readerCache holds a parsed view of the firmware image. Lifetime is
@@ -165,15 +163,3 @@ func isFatNotFound(err error) bool {
 	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "not found")
 }
 
-// loadEnvFresh reads and parses a U-Boot env file from the image without
-// mounting. Returns an empty Env when the file is missing. Must hold c.mu.
-func (c *Controller) loadEnvFresh(hostPath string) (*ubootenv.Env, error) {
-	data, err := c.readFileFresh(c.fatRelPath(hostPath))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return ubootenv.New(), nil
-		}
-		return nil, err
-	}
-	return ubootenv.Parse(data)
-}

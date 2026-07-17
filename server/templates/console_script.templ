@@ -70,6 +70,24 @@ templ consoleScript() {
 			term.loadAddon(fitAddon);
 			searchAddon = new SearchAddon();
 			term.loadAddon(searchAddon);
+
+			// Bind Ctrl+F to the search bar at the xterm level so the key is
+			// swallowed while the terminal is focused - otherwise xterm would
+			// forward ^F (0x06) to the PTY (readline forward-char / vim page
+			// down) in addition to opening the find bar. Returning false stops
+			// xterm from sending it; preventDefault stops the browser's own
+			// find. The document keydown handler still covers Ctrl+F when focus
+			// is outside the terminal.
+			term.attachCustomKeyEventHandler((e) => {
+				if (e.type === 'keydown' && e.ctrlKey && !e.altKey && !e.metaKey &&
+				    (e.key === 'f' || e.key === 'F')) {
+					e.preventDefault();
+					openSearch();
+					return false;
+				}
+				return true;
+			});
+
 			const el = document.getElementById('terminal');
 			el.innerHTML = '';
 			term.open(el);

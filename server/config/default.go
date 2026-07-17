@@ -73,6 +73,21 @@ var defaultConfig = &Config{
 		// kept in sync with host/BMC writes.
 		SnapshotPath: "/data/efivars/store.bin",
 	},
+	UbootEnv: UbootEnv{
+		Enabled: true,
+		// The same EEPROM as the UEFI variable store (see EfiVars): the host's
+		// CONFIG_ENV_IS_IN_EEPROM writes its env partition at 0x4000 of that
+		// 24c256, and the BMC reads/writes the same bytes out-of-band through
+		// the slave device's backing file.
+		Path:     "/sys/bus/i2c/devices/0-1050/slave-eeprom",
+		I2CBus:   -1, // disable the raw-master fallback
+		I2CAddr:  0x50,
+		PageSize: 64,
+		Offset:   0x4000, // host CONFIG_ENV_OFFSET
+		Size:     0x4000, // host CONFIG_ENV_SIZE
+		// Durable mirror on /data; see EfiVars.SnapshotPath.
+		SnapshotPath: "/data/ubootenv/env.bin",
+	},
 	Power: Power{
 		LegacyMode: false,
 	},
@@ -185,6 +200,38 @@ func checkDefaultValue() {
 	// so persistence is enabled on upgrade without editing server.yaml.
 	if instance.EfiVars.SnapshotPath == "" {
 		instance.EfiVars.SnapshotPath = defaultConfig.EfiVars.SnapshotPath
+	}
+
+	// Apply U-Boot env store defaults, mirroring the EfiVars handling above:
+	// the environment lives at an offset of the same EEPROM.
+	if instance.UbootEnv.Path == "" && instance.UbootEnv.I2CBus == 0 {
+		instance.UbootEnv.Path = defaultConfig.UbootEnv.Path
+		instance.UbootEnv.I2CBus = defaultConfig.UbootEnv.I2CBus
+	}
+	if instance.UbootEnv.I2CAddr == 0 {
+		instance.UbootEnv.I2CAddr = defaultConfig.UbootEnv.I2CAddr
+	}
+	if instance.UbootEnv.PageSize <= 0 {
+		instance.UbootEnv.PageSize = defaultConfig.UbootEnv.PageSize
+	}
+	if instance.UbootEnv.Offset <= 0 {
+		instance.UbootEnv.Offset = defaultConfig.UbootEnv.Offset
+	}
+	if instance.UbootEnv.Size <= 0 {
+		instance.UbootEnv.Size = defaultConfig.UbootEnv.Size
+	}
+	if instance.UbootEnv.SnapshotPath == "" {
+		instance.UbootEnv.SnapshotPath = defaultConfig.UbootEnv.SnapshotPath
+	}
+
+	// The UEFI blob sits below the env partition on the same chip and is
+	// otherwise bounded only by the whole-chip storeSize, so it could grow
+	// into the environment. Clamp it at the env offset — the BMC-side mirror
+	// of the cap U-Boot applies at CONFIG_ENV_OFFSET. This also upgrades
+	// legacy configs that persisted the old whole-chip storeSize (32768).
+	if instance.UbootEnv.Enabled && instance.EfiVars.Path == instance.UbootEnv.Path &&
+		instance.EfiVars.StoreSize > instance.UbootEnv.Offset {
+		instance.EfiVars.StoreSize = instance.UbootEnv.Offset
 	}
 
 	if instance.Telemetry.ServiceName == "" {
