@@ -192,4 +192,11 @@ type EfiVars struct {
 	PageSize int `yaml:"pageSize"`
 	// StoreSize caps the variable blob size in bytes (default 32768, 24c256).
 	StoreSize int `yaml:"storeSize"`
+	// SnapshotPath is a durable file on persistent storage that mirrors the
+	// store. The kernel i2c-slave-eeprom backing the EEPROM is volatile RAM,
+	// wiped on every BMC reboot; the app restores this snapshot into it at
+	// startup and re-saves it whenever the host (or the BMC) changes the
+	// store, so BootOrder/BootNext survive BMC reboots. Empty disables
+	// persistence.
+	SnapshotPath string `yaml:"snapshotPath"`
 }

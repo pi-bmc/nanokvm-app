@@ -30,6 +30,13 @@ type Manager struct {
 
 	cache     []Variable
 	cacheTime time.Time
+
+	// snapshotPath is the durable /data mirror of the store; see persist.go.
+	// Empty disables persistence. lastSnapshot is the blob most recently
+	// written there, so the watcher and save() skip redundant rewrites.
+	snapshotPath string
+	lastSnapshot []byte
+	persistOnce  sync.Once
 }
 
 var (
@@ -46,6 +53,7 @@ func GetManager() *Manager {
 		if !cfg.Enabled {
 			return
 		}
+		instance.snapshotPath = cfg.SnapshotPath
 		switch {
 		case cfg.Path != "":
 			instance.backend = NewFileBackend(cfg.Path, cfg.StoreSize)
@@ -133,6 +141,8 @@ func (m *Manager) save(vars []Variable) error {
 		return err
 	}
 	m.cache, m.cacheTime = vars, time.Now()
+	// Mirror the just-written blob to the durable snapshot (best-effort).
+	m.persistLocked(blob)
 	return nil
 }
 

@@ -68,6 +68,10 @@ var defaultConfig = &Config{
 		I2CAddr:   0x50,
 		PageSize:  64,
 		StoreSize: 32768,
+		// Durable mirror on /data (survives BMC reboots, unlike the volatile
+		// i2c-slave-eeprom RAM buffer). Restored into the EEPROM at startup and
+		// kept in sync with host/BMC writes.
+		SnapshotPath: "/data/efivars/store.bin",
 	},
 	Power: Power{
 		LegacyMode: false,
@@ -176,6 +180,11 @@ func checkDefaultValue() {
 	}
 	if instance.EfiVars.StoreSize <= 0 {
 		instance.EfiVars.StoreSize = defaultConfig.EfiVars.StoreSize
+	}
+	// Backfill the durable snapshot path for configs written before it existed,
+	// so persistence is enabled on upgrade without editing server.yaml.
+	if instance.EfiVars.SnapshotPath == "" {
+		instance.EfiVars.SnapshotPath = defaultConfig.EfiVars.SnapshotPath
 	}
 
 	if instance.Telemetry.ServiceName == "" {

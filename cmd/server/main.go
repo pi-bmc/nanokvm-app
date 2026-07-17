@@ -15,6 +15,7 @@ import (
 	"github.com/pi-bmc/nanokvm-app/server/router"
 	"github.com/pi-bmc/nanokvm-app/server/service/application"
 	"github.com/pi-bmc/nanokvm-app/server/service/autoupdate"
+	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 	"github.com/pi-bmc/nanokvm-app/server/service/ipmi"
 	"github.com/pi-bmc/nanokvm-app/server/telemetry"
@@ -70,6 +71,10 @@ func initialize() {
 	if err := firmware.GetController().Init(); err != nil {
 		log.Printf("Firmware controller init: %v", err)
 	}
+
+	// Mirror the UEFI variable store to durable storage: restore it into the
+	// volatile i2c-slave-eeprom at boot and keep it in sync with host writes.
+	efivars.GetManager().StartPersistence()
 
 	// Start the auto-update ticker (no-op when AutoUpdate.Enabled is false).
 	autoupdate.Start()
