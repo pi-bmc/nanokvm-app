@@ -264,6 +264,46 @@ paths:
 
   # ----------------------------------------------------------------- Bios
 
+  /redfish/v1/Systems/1/TrustedComponents:
+    get:
+      tags: [Systems]
+      summary: |
+        Platform roots of trust. Contains one member, the rpi-eeprom
+        bootloader, linked from `ComputerSystem.Links.TrustedComponents`.
+      responses:
+        "200":
+          description: TrustedComponent collection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Collection" }
+
+  /redfish/v1/Systems/1/TrustedComponents/Bootloader:
+    get:
+      tags: [Systems]
+      summary: |
+        The RPi 5 bootloader (rpi-eeprom) as an Integrated root of trust.
+        `Links.ActiveSoftwareImage` points at its running firmware.
+      responses:
+        "200":
+          description: TrustedComponent resource.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrustedComponent" }
+
+  /redfish/v1/Systems/1/TrustedComponents/Bootloader/SoftwareImages/Active:
+    get:
+      tags: [Systems]
+      summary: |
+        The running bootloader firmware. `Version` is the rpi-eeprom git
+        hash and `ReleaseDate` the EEPROM flash time, both from the UEFI
+        variables U-Boot publishes over I2C.
+      responses:
+        "200":
+          description: SoftwareInventory resource.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SoftwareInventory" }
+
   /redfish/v1/Systems/1/Bios:
     get:
       tags: [Bios]
@@ -764,6 +804,93 @@ components:
           type: object
           properties:
             "@odata.id": { type: string, example: "/redfish/v1/Systems/1/Bios" }
+        Links:
+          type: object
+          description:
+            Navigation links. TrustedComponents advertises platform roots of
+            trust — here, the rpi-eeprom bootloader.
+          properties:
+            TrustedComponents:
+              type: array
+              items:
+                { type: object, properties: { "@odata.id": { type: string } } }
+
+    TrustedComponent:
+      type: object
+      properties:
+        "@odata.type":
+          { type: string, example: "#TrustedComponent.v1_4_0.TrustedComponent" }
+        "@odata.id":
+          {
+            type: string,
+            example: "/redfish/v1/Systems/1/TrustedComponents/Bootloader",
+          }
+        Id: { type: string, example: Bootloader }
+        Name: { type: string }
+        Description: { type: string }
+        TrustedComponentType:
+          { type: string, enum: [Integrated, Discrete], example: Integrated }
+        Manufacturer: { type: string, example: Raspberry Pi }
+        Model: { type: string }
+        FirmwareVersion:
+          {
+            type: string,
+            description: rpi-eeprom git hash of the running bootloader.,
+          }
+        Status:
+          type: object
+          properties:
+            State: { type: string }
+            Health: { type: string }
+        Links:
+          type: object
+          properties:
+            ActiveSoftwareImage:
+              type: object
+              properties: { "@odata.id": { type: string } }
+            SoftwareImages:
+              type: array
+              items:
+                { type: object, properties: { "@odata.id": { type: string } } }
+            IntegratedInto:
+              type: object
+              properties: { "@odata.id": { type: string } }
+
+    SoftwareInventory:
+      type: object
+      properties:
+        "@odata.type":
+          { type: string, example: "#SoftwareInventory.v1_8_0.SoftwareInventory" }
+        "@odata.id":
+          {
+            type: string,
+            example: "/redfish/v1/Systems/1/TrustedComponents/Bootloader/SoftwareImages/Active",
+          }
+        Id: { type: string, example: Active }
+        Name: { type: string }
+        Description: { type: string }
+        SoftwareId: { type: string, example: rpi-eeprom }
+        Version:
+          {
+            type: string,
+            description:
+              rpi-eeprom git hash (from the BootloaderVersion UEFI variable).,
+          }
+        ReleaseDate:
+          {
+            type: string,
+            format: date-time,
+            description:
+              EEPROM flash time (from the BootloaderUpdateTimestamp UEFI
+              variable).,
+          }
+        VersionScheme: { type: string, example: OEM }
+        Updateable: { type: boolean }
+        Status:
+          type: object
+          properties:
+            State: { type: string }
+            Health: { type: string }
 
     Bios:
       type: object

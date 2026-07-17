@@ -107,7 +107,16 @@ type ComputerSystem struct {
 	Boot             Boot              `json:"Boot"`
 	Bios             *Link             `json:"Bios,omitempty"`
 	Actions          *SystemActions    `json:"Actions,omitempty"`
+	Links            *SystemLinks      `json:"Links,omitempty"`
 	Oem              Oem               `json:"Oem,omitempty"`
+}
+
+// SystemLinks carries ComputerSystem navigation links. TrustedComponents is
+// the standard place to advertise platform roots of trust; on the RPi 5 the
+// rpi-eeprom bootloader is one, exposed with its firmware as a nested
+// SoftwareInventory (see trusted_components.go).
+type SystemLinks struct {
+	TrustedComponents Links `json:"TrustedComponents,omitempty"`
 }
 
 // ProcessorSummary mirrors the Redfish property set. Note there is no
@@ -239,11 +248,42 @@ type SimpleUpdateAction struct {
 
 type SoftwareInventory struct {
 	Resource
-	SoftwareID string  `json:"SoftwareId,omitempty"`
-	Version    string  `json:"Version,omitempty"`
-	Updateable bool    `json:"Updateable"`
-	Status     *Status `json:"Status,omitempty"`
-	Oem        Oem     `json:"Oem,omitempty"`
+	SoftwareID string `json:"SoftwareId,omitempty"`
+	Version    string `json:"Version,omitempty"`
+	// ReleaseDate is the firmware's release/production date (ISO 8601). For
+	// the bootloader it carries the EEPROM flash time from
+	// BootloaderUpdateTimestamp.
+	ReleaseDate   string                `json:"ReleaseDate,omitempty"`
+	VersionScheme schemas.VersionScheme `json:"VersionScheme,omitempty"`
+	Updateable    bool                  `json:"Updateable"`
+	Status        *Status               `json:"Status,omitempty"`
+	Oem           Oem                   `json:"Oem,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// TrustedComponent
+
+// TrustedComponent models a platform root of trust and links to the firmware
+// running on it. The rpi-eeprom bootloader is the RPi 5 RoT: it is the
+// first-stage, secure-boot-capable loader integrated into the SoC's SPI flash.
+type TrustedComponent struct {
+	Resource
+	TrustedComponentType schemas.TrustedComponentType `json:"TrustedComponentType,omitempty"`
+	Manufacturer         string                       `json:"Manufacturer,omitempty"`
+	Model                string                       `json:"Model,omitempty"`
+	FirmwareVersion      string                       `json:"FirmwareVersion,omitempty"`
+	SerialNumber         string                       `json:"SerialNumber,omitempty"`
+	Status               *Status                      `json:"Status,omitempty"`
+	Links                *TrustedComponentLinks       `json:"Links,omitempty"`
+	Oem                  Oem                          `json:"Oem,omitempty"`
+}
+
+// TrustedComponentLinks references the component's firmware images and the
+// resource it is integrated into (the ComputerSystem).
+type TrustedComponentLinks struct {
+	ActiveSoftwareImage *Link `json:"ActiveSoftwareImage,omitempty"`
+	SoftwareImages      Links `json:"SoftwareImages,omitempty"`
+	IntegratedInto      *Link `json:"IntegratedInto,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

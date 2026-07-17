@@ -51,6 +51,13 @@ func redfishRouter(r *gin.Engine) {
 		api.PATCH("/Systems/1/Bios/Settings", service.PatchBiosSettings)
 		api.GET("/Systems/1/Bios/AttributeRegistry", service.GetBiosAttributeRegistry)
 
+		// TrustedComponents — the rpi-eeprom bootloader as the platform root
+		// of trust, with its firmware version/flash-time as a nested
+		// SoftwareInventory.
+		api.GET("/Systems/1/TrustedComponents", service.GetTrustedComponentCollection)
+		api.GET("/Systems/1/TrustedComponents/Bootloader", service.GetTrustedComponentBootloader)
+		api.GET("/Systems/1/TrustedComponents/Bootloader/SoftwareImages/Active", service.GetBootloaderSoftwareInventory)
+
 		// Managers
 		api.GET("/Managers", service.GetManagerCollection)
 		api.GET("/Managers/1", service.GetManager)

@@ -90,10 +90,16 @@ const (
 	ServiceRootPath = schemas.DefaultServiceRoot
 	metadataPath    = schemas.DefaultServiceRoot + "$metadata"
 
-	systemsPath           = schemas.DefaultServiceRoot + "Systems"
-	systemPath            = systemsPath + "/1"
-	systemResetPath       = systemPath + "/Actions/ComputerSystem.Reset"
-	biosPath              = systemPath + "/Bios"
+	systemsPath     = schemas.DefaultServiceRoot + "Systems"
+	systemPath      = systemsPath + "/1"
+	systemResetPath = systemPath + "/Actions/ComputerSystem.Reset"
+	biosPath        = systemPath + "/Bios"
+
+	trustedComponentsPath   = systemPath + "/TrustedComponents"
+	bootloaderComponentPath = trustedComponentsPath + "/Bootloader"
+	// The bootloader's firmware is nested under its trusted component.
+	bootloaderSoftwarePath = bootloaderComponentPath + "/SoftwareImages/Active"
+
 	biosSettingsPath      = biosPath + "/Settings"
 	biosRegistryPath      = biosPath + "/AttributeRegistry"
 	biosChangePasswordURI = biosPath + "/Actions/Bios.ChangePassword"

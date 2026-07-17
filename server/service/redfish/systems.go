@@ -134,6 +134,12 @@ func buildSystemResource() ComputerSystem {
 				AllowableResetVal: supportedResetTypes,
 			},
 		},
+		// The rpi-eeprom bootloader is exposed as a TrustedComponent (the
+		// platform root of trust); its version/flash-time live on the nested
+		// SoftwareInventory. See trusted_components.go.
+		Links: &SystemLinks{
+			TrustedComponents: Links{Link(bootloaderComponentPath)},
+		},
 	}
 
 	// Environment first, SMBIOS overlaid on top — see inventory.go.

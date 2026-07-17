@@ -32,6 +32,9 @@ func testServer(t *testing.T) *httptest.Server {
 	r.GET(systemsPath, svc.GetSystemCollection)
 	r.GET(systemPath, svc.GetSystem)
 	r.GET(biosPath, svc.GetBios)
+	r.GET(trustedComponentsPath, svc.GetTrustedComponentCollection)
+	r.GET(bootloaderComponentPath, svc.GetTrustedComponentBootloader)
+	r.GET(bootloaderSoftwarePath, svc.GetBootloaderSoftwareInventory)
 	r.GET(managersPath, svc.GetManagerCollection)
 	r.GET(managerPath, svc.GetManager)
 	r.GET(sessionServicePath, svc.GetSessionService)
@@ -118,6 +121,50 @@ func TestGofishFollowsBiosLink(t *testing.T) {
 	// GETs it. A bare-string link would leave the field empty and error.
 	if _, err := systems[0].Bios(); err != nil {
 		t.Errorf("gofish could not follow the Bios link: %v", err)
+	}
+}
+
+// The bootloader is exposed as a TrustedComponent (root of trust) with its
+// firmware as a nested SoftwareInventory. gofish must follow
+// System → Links.TrustedComponents → ActiveSoftwareImage end to end.
+func TestGofishTrustedComponentsAndSoftwareImage(t *testing.T) {
+	ts := testServer(t)
+
+	client, err := gofish.ConnectDefault(ts.URL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Logout()
+
+	systems, err := client.GetService().Systems()
+	if err != nil || len(systems) == 0 {
+		t.Fatalf("systems: %v", err)
+	}
+
+	comps, err := systems[0].TrustedComponents()
+	if err != nil {
+		t.Fatalf("gofish could not follow Links.TrustedComponents: %v", err)
+	}
+	if len(comps) != 1 {
+		t.Fatalf("discovered %d trusted components, want 1", len(comps))
+	}
+	if comps[0].TrustedComponentType != schemas.IntegratedTrustedComponentType {
+		t.Errorf("TrustedComponentType = %q, want Integrated", comps[0].TrustedComponentType)
+	}
+	if comps[0].Manufacturer != "Raspberry Pi" {
+		t.Errorf("Manufacturer = %q, want Raspberry Pi", comps[0].Manufacturer)
+	}
+
+	// The nested SoftwareInventory carries the bootloader version/flash-time.
+	img, err := comps[0].ActiveSoftwareImage()
+	if err != nil {
+		t.Fatalf("gofish could not follow ActiveSoftwareImage: %v", err)
+	}
+	if img.SoftwareID != "rpi-eeprom" {
+		t.Errorf("SoftwareId = %q, want rpi-eeprom", img.SoftwareID)
+	}
+	if !img.Updateable {
+		t.Error("SoftwareInventory should be Updateable (BMC stages pieeprom.upd)")
 	}
 }
 

@@ -54,22 +54,13 @@ func (s *Service) GetBios(c *gin.Context) {
 		biosVersion = info.BIOSVersion
 	}
 
-	// Vendor OEM block: the running rpi-eeprom bootloader's provenance, which
-	// U-Boot mirrors from the firmware device tree into UEFI variables. This
-	// is the RPi bootloader layer beneath U-Boot; BiosVersion above stays the
-	// U-Boot/SMBIOS version. Only include fields U-Boot actually reported.
+	// The rpi-eeprom bootloader version/flash-time are exposed as a
+	// TrustedComponent SoftwareInventory (trusted_components.go), not here —
+	// this resource is U-Boot's BIOS/bootconf surface.
 	nanokvmOem := map[string]any{
 		odataTypeKey:    "#NanoKVM.v1_0_0.Bios",
 		"Diagnostics":   diag,
 		"SourceMissing": diag.Source == "",
-	}
-	if prov := ctrl.GetBootloaderProvenance(); prov.Available() {
-		if prov.GitVersion != "" {
-			nanokvmOem["BootloaderVersion"] = prov.GitVersion
-		}
-		if prov.UpdatedUnix != 0 {
-			nanokvmOem["BootloaderUpdatedUnix"] = prov.UpdatedUnix
-		}
 	}
 
 	c.JSON(http.StatusOK, Bios{
