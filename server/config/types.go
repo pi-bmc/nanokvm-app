@@ -164,7 +164,7 @@ type Firmware struct {
 	FirmwareDir string `yaml:"firmwareDir"`
 	// MountPoint is retained for backward-compat with existing YAML files but
 	// is no longer used at runtime — env paths are derived as FAT-root names.
-	MountPoint    string `yaml:"mountPoint"`
+	MountPoint string `yaml:"mountPoint"`
 	// MachineEnv, PersistentEnv and OnceEnv are retained for backward-compat
 	// with existing YAML files but are no longer used at runtime: the U-Boot
 	// environment lives in the I2C EEPROM (see UbootEnv), not in files inside

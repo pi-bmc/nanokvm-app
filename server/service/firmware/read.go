@@ -162,4 +162,3 @@ func isFatNotFound(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "not found")
 }
-
