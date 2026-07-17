@@ -23,6 +23,7 @@ import (
 
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware/eepromkeys"
+	"github.com/pi-bmc/nanokvm-app/server/service/smbios"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,11 +41,17 @@ func (s *Service) GetBios(c *gin.Context) {
 		return
 	}
 
+	// Prefer the SMBIOS type 0 version the host mirrors into the EEPROM (a
+	// clean "2026.04"); the env's ver is the full banner string. Fall back to
+	// the env when the tables are absent.
 	biosVersion := ""
 	if inv, err := ctrl.GetInventory(); err == nil {
 		if v, ok := inv["ver"]; ok {
 			biosVersion = v
 		}
+	}
+	if info, err := smbios.GetStore().Load(); err == nil && info.BIOSVersion != "" {
+		biosVersion = info.BIOSVersion
 	}
 
 	res := gin.H{

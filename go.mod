@@ -1,6 +1,6 @@
 module github.com/pi-bmc/nanokvm-app
 
-go 1.25.7
+go 1.26.3
 
 require (
 	github.com/a-h/templ v0.3.1001
@@ -12,6 +12,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/mervick/aes-everywhere/go/aes256 v0.0.0-20240803013625-6759956693c0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/siderolabs/go-smbios v0.3.4
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/viper v1.21.0
 	github.com/templui/templui v1.11.2

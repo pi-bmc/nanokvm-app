@@ -84,9 +84,21 @@ var defaultConfig = &Config{
 		I2CAddr:  0x50,
 		PageSize: 64,
 		Offset:   0x4000, // host CONFIG_ENV_OFFSET
-		Size:     0x4000, // host CONFIG_ENV_SIZE
+		Size:     0x2000, // host CONFIG_ENV_SIZE
 		// Durable mirror on /data; see EfiVars.SnapshotPath.
 		SnapshotPath: "/data/ubootenv/env.bin",
+	},
+	SMBIOS: SMBIOS{
+		Enabled: true,
+		// A third region of the same EEPROM (see EfiVars/UbootEnv): the
+		// host's CONFIG_SMBIOS_I2C_STORE writes the tables it generates at
+		// boot to 0x6000, and the BMC reads them out-of-band for inventory.
+		Path:     "/sys/bus/i2c/devices/0-1050/slave-eeprom",
+		I2CBus:   -1, // disable the raw-master fallback
+		I2CAddr:  0x50,
+		PageSize: 64,
+		Offset:   0x6000, // host CONFIG_SMBIOS_I2C_STORE_OFFSET
+		Size:     0x800,  // host CONFIG_SMBIOS_I2C_STORE_SIZE
 	},
 	Power: Power{
 		LegacyMode: false,
@@ -222,6 +234,25 @@ func checkDefaultValue() {
 	}
 	if instance.UbootEnv.SnapshotPath == "" {
 		instance.UbootEnv.SnapshotPath = defaultConfig.UbootEnv.SnapshotPath
+	}
+
+	// Apply SMBIOS store defaults, mirroring the handling above: the tables
+	// live in a third region of the same EEPROM.
+	if instance.SMBIOS.Path == "" && instance.SMBIOS.I2CBus == 0 {
+		instance.SMBIOS.Path = defaultConfig.SMBIOS.Path
+		instance.SMBIOS.I2CBus = defaultConfig.SMBIOS.I2CBus
+	}
+	if instance.SMBIOS.I2CAddr == 0 {
+		instance.SMBIOS.I2CAddr = defaultConfig.SMBIOS.I2CAddr
+	}
+	if instance.SMBIOS.PageSize <= 0 {
+		instance.SMBIOS.PageSize = defaultConfig.SMBIOS.PageSize
+	}
+	if instance.SMBIOS.Offset <= 0 {
+		instance.SMBIOS.Offset = defaultConfig.SMBIOS.Offset
+	}
+	if instance.SMBIOS.Size <= 0 {
+		instance.SMBIOS.Size = defaultConfig.SMBIOS.Size
 	}
 
 	// The UEFI blob sits below the env partition on the same chip and is

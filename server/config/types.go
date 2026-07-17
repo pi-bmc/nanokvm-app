@@ -18,6 +18,7 @@ type Config struct {
 	Firmware       Firmware `yaml:"firmware"`
 	EfiVars        EfiVars  `yaml:"efiVars"`
 	UbootEnv       UbootEnv `yaml:"ubootEnv"`
+	SMBIOS         SMBIOS   `yaml:"smbios"`
 
 	Power      Power      `yaml:"power"`
 	Telemetry  Telemetry  `yaml:"telemetry"`
@@ -240,4 +241,38 @@ type UbootEnv struct {
 	// whenever the host (saveenv) or the BMC changes the environment, so it
 	// survives BMC reboots. Empty disables persistence.
 	SnapshotPath string `yaml:"snapshotPath"`
+}
+
+// SMBIOS configures access to the SMBIOS tables the host's U-Boot mirrors into
+// a third region of the same EEPROM (CONFIG_SMBIOS_I2C_STORE):
+//
+//	0x0000..0x3fff  UEFI variable blob (EfiVars)
+//	0x4000..0x5fff  U-Boot environment (UbootEnv)
+//	0x6000..0x67ff  SMBIOS tables      (this store)
+//
+// The tables are the same bytes the host OS sees and carry more than the
+// environment does - the type 1 UUID, product name/version, SKU and the
+// processor detail exist nowhere else - so inventory prefers them. Read-only:
+// only the host writes this region, so there is no snapshot to reconcile.
+type SMBIOS struct {
+	// Enabled gates the subsystem; when false inventory falls back to the
+	// U-Boot environment.
+	Enabled bool `yaml:"enabled"`
+	// Path is a file-backed store: the backing file of a kernel
+	// i2c-slave-eeprom device (BMC emulating the EEPROM), an at24 sysfs
+	// eeprom node, or a plain file for testing. Takes precedence over I2CBus.
+	Path string `yaml:"path"`
+	// I2CBus selects raw /dev/i2c-N master access when Path is empty.
+	// Set to -1 to disable.
+	I2CBus int `yaml:"i2cBus"`
+	// I2CAddr is the EEPROM chip address (default 0x50).
+	I2CAddr int `yaml:"i2cAddr"`
+	// PageSize is the EEPROM write page size in bytes (default 64, 24c256).
+	PageSize int `yaml:"pageSize"`
+	// Offset is where the SMBIOS region starts in the EEPROM. Must match the
+	// host's CONFIG_SMBIOS_I2C_STORE_OFFSET (default 0x6000).
+	Offset int `yaml:"offset"`
+	// Size is the SMBIOS region size. Must match the host's
+	// CONFIG_SMBIOS_I2C_STORE_SIZE (default 0x800).
+	Size int `yaml:"size"`
 }

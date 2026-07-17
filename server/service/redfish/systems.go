@@ -1,6 +1,7 @@
 package redfish
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 	"github.com/pi-bmc/nanokvm-app/server/service/power"
+	"github.com/pi-bmc/nanokvm-app/server/service/smbios"
 )
 
 var validBootTargets = map[string]bool{
@@ -252,26 +254,79 @@ func buildSystemResource() gin.H {
 		},
 	}
 
-	if inv, err := firmware.GetController().GetInventory(); err == nil {
-		if v, ok := inv["board_name"]; ok {
-			systemInfo["Model"] = v
+	// Prefer the SMBIOS tables the host mirrors into the EEPROM: they are the
+	// bytes the OS itself sees and carry more than the environment does - the
+	// UUID, the full product name/version and the processor detail exist
+	// nowhere else. Fall back to the env when the region is blank (e.g. the
+	// host has not booted this firmware yet).
+	applyEnvInventory(systemInfo)
+	applySMBIOSInventory(systemInfo)
+
+	return systemInfo
+}
+
+// applyEnvInventory fills the system resource from the U-Boot environment.
+func applyEnvInventory(systemInfo gin.H) {
+	inv, err := firmware.GetController().GetInventory()
+	if err != nil {
+		return
+	}
+	for key, field := range map[string]string{
+		"board_name": "Model",
+		"serial#":    "SerialNumber",
+		"ethaddr":    "MACAddress",
+		"vendor":     "Manufacturer",
+		"ver":        "FirmwareVersion",
+	} {
+		if v, ok := inv[key]; ok && v != "" {
+			systemInfo[field] = v
 		}
-		if v, ok := inv["serial#"]; ok {
-			systemInfo["SerialNumber"] = v
+	}
+	if v, ok := inv["cpu"]; ok && v != "" {
+		systemInfo["ProcessorSummary"] = gin.H{"Model": v}
+	}
+}
+
+// applySMBIOSInventory overlays the richer SMBIOS values, leaving whatever the
+// environment supplied in place for anything SMBIOS does not carry.
+func applySMBIOSInventory(systemInfo gin.H) {
+	info, err := smbios.GetStore().Load()
+	if err != nil {
+		if !errors.Is(err, smbios.ErrNoTables) && !errors.Is(err, smbios.ErrNotConfigured) {
+			log.Warnf("redfish: reading SMBIOS tables: %v", err)
 		}
-		if v, ok := inv["ethaddr"]; ok {
-			systemInfo["MACAddress"] = v
-		}
-		if v, ok := inv["vendor"]; ok {
-			systemInfo["Manufacturer"] = v
-		}
-		if v, ok := inv["cpu"]; ok {
-			systemInfo["ProcessorSummary"] = gin.H{"Model": v}
-		}
-		if v, ok := inv["ver"]; ok {
-			systemInfo["FirmwareVersion"] = v
+		return
+	}
+
+	for value, field := range map[string]string{
+		info.Product:      "Model",
+		info.Manufacturer: "Manufacturer",
+		info.Serial:       "SerialNumber",
+		info.UUID:         "UUID",
+		info.SKU:          "SKU",
+		info.Version:      "Version",
+		info.BIOSVersion:  "FirmwareVersion",
+	} {
+		if value != "" {
+			systemInfo[field] = value
 		}
 	}
 
-	return systemInfo
+	if info.CPUVersion != "" || info.CPUCores > 0 {
+		cpu := gin.H{}
+		if info.CPUVersion != "" {
+			cpu["Model"] = info.CPUVersion
+		}
+		if info.CPUManufacturer != "" {
+			cpu["Manufacturer"] = info.CPUManufacturer
+		}
+		if info.CPUCores > 0 {
+			cpu["CoreCount"] = info.CPUCores
+			cpu["Count"] = 1
+		}
+		if info.CPUThreads > 0 {
+			cpu["LogicalProcessorCount"] = info.CPUThreads
+		}
+		systemInfo["ProcessorSummary"] = cpu
+	}
 }
