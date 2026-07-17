@@ -1,5 +1,7 @@
 package config
 
+import "log"
+
 var defaultConfig = &Config{
 	Proto: "http",
 	Port: Port{
@@ -190,6 +192,36 @@ func checkDefaultValue() {
 		instance.Firmware.MediaDir = defaultConfig.Firmware.MediaDir
 	}
 
+	normalizeEEPROMRegions()
+
+	if instance.Telemetry.ServiceName == "" {
+		instance.Telemetry.ServiceName = defaultConfig.Telemetry.ServiceName
+	}
+	if instance.Telemetry.Prometheus.Path == "" {
+		instance.Telemetry.Prometheus.Path = defaultConfig.Telemetry.Prometheus.Path
+	}
+
+	if instance.AutoUpdate.IntervalMinutes <= 0 {
+		instance.AutoUpdate.IntervalMinutes = defaultConfig.AutoUpdate.IntervalMinutes
+	}
+
+	instance.Hardware = getHardware()
+
+	// Persist the generated secret key so tokens survive server restarts.
+	if needsPersist {
+		persistConfig()
+	}
+}
+
+// normalizeEEPROMRegions applies the defaults for the three stores that share
+// the one 24c256, then holds their regions apart.
+//
+// efivars, ubootenv and smbios all address the same backing file, so a region
+// that overruns its neighbour silently corrupts it. The clamps at the end also
+// upgrade configs already persisted to /etc/kvm/server.yaml by an older build:
+// a stale value is non-zero, so it survives the `<= 0` backfills and has to be
+// corrected explicitly.
+func normalizeEEPROMRegions() {
 	// Apply EFI variable store defaults when not present in the config file.
 	// When neither a path nor an explicit non-zero master bus is configured,
 	// default to the BMC's own i2c-slave-eeprom backing file (see defaultConfig).
@@ -255,31 +287,46 @@ func checkDefaultValue() {
 		instance.SMBIOS.Size = defaultConfig.SMBIOS.Size
 	}
 
-	// The UEFI blob sits below the env partition on the same chip and is
-	// otherwise bounded only by the whole-chip storeSize, so it could grow
-	// into the environment. Clamp it at the env offset — the BMC-side mirror
-	// of the cap U-Boot applies at CONFIG_ENV_OFFSET. This also upgrades
-	// legacy configs that persisted the old whole-chip storeSize (32768).
+	// The three stores share one 24c256, so each region has to stop where the
+	// next begins. Both clamps below also upgrade configs persisted to
+	// /etc/kvm/server.yaml by an older build, which is why they cannot be
+	// expressed as plain defaults — a stale value is non-zero and so survives
+	// the `<= 0` backfills above.
+
+	// The UEFI blob sits below the env partition and is otherwise bounded only
+	// by the whole-chip storeSize, so it could grow into the environment.
+	// Clamp it at the env offset — the BMC-side mirror of the cap U-Boot
+	// applies at CONFIG_ENV_OFFSET. Upgrades configs holding the old
+	// whole-chip storeSize (32768).
 	if instance.UbootEnv.Enabled && instance.EfiVars.Path == instance.UbootEnv.Path &&
 		instance.EfiVars.StoreSize > instance.UbootEnv.Offset {
+		log.Printf("config: efiVars.storeSize %d overruns ubootEnv.offset %#x; clamping to %#x",
+			instance.EfiVars.StoreSize, instance.UbootEnv.Offset, instance.UbootEnv.Offset)
 		instance.EfiVars.StoreSize = instance.UbootEnv.Offset
 	}
 
-	if instance.Telemetry.ServiceName == "" {
-		instance.Telemetry.ServiceName = defaultConfig.Telemetry.ServiceName
-	}
-	if instance.Telemetry.Prometheus.Path == "" {
-		instance.Telemetry.Prometheus.Path = defaultConfig.Telemetry.Prometheus.Path
+	// The env partition sits below the SMBIOS tables, and its size is not just
+	// a bound but the CRC length: U-Boot checksums CONFIG_ENV_SIZE-4 bytes, so
+	// a size that disagrees with the host makes every read fail with
+	// "bad CRC, using default environment" — even though the bytes are intact.
+	// Clamp it at the SMBIOS offset, which upgrades configs holding the old
+	// 0x4000 env size (that value both mis-sizes the CRC and overruns the
+	// tables at 0x6000).
+	if instance.SMBIOS.Enabled && instance.UbootEnv.Enabled &&
+		instance.UbootEnv.Path == instance.SMBIOS.Path &&
+		instance.UbootEnv.Offset+instance.UbootEnv.Size > instance.SMBIOS.Offset {
+		log.Printf("config: ubootEnv region %#x..%#x overruns smbios.offset %#x; "+
+			"clamping size %#x -> %#x (a size disagreeing with the host's "+
+			"CONFIG_ENV_SIZE makes U-Boot report a bad env CRC)",
+			instance.UbootEnv.Offset, instance.UbootEnv.Offset+instance.UbootEnv.Size,
+			instance.SMBIOS.Offset, instance.UbootEnv.Size,
+			instance.SMBIOS.Offset-instance.UbootEnv.Offset)
+		instance.UbootEnv.Size = instance.SMBIOS.Offset - instance.UbootEnv.Offset
 	}
 
-	if instance.AutoUpdate.IntervalMinutes <= 0 {
-		instance.AutoUpdate.IntervalMinutes = defaultConfig.AutoUpdate.IntervalMinutes
-	}
-
-	instance.Hardware = getHardware()
-
-	// Persist the generated secret key so tokens survive server restarts.
-	if needsPersist {
-		persistConfig()
-	}
+	log.Printf("config: eeprom layout %s — uefi [0x0,%#x) env [%#x,%#x) smbios [%#x,%#x)",
+		instance.UbootEnv.Path,
+		instance.EfiVars.StoreSize,
+		instance.UbootEnv.Offset, instance.UbootEnv.Offset+instance.UbootEnv.Size,
+		instance.SMBIOS.Offset, instance.SMBIOS.Offset+instance.SMBIOS.Size)
 }

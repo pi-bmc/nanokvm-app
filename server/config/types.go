@@ -233,7 +233,10 @@ type UbootEnv struct {
 	// host's CONFIG_ENV_OFFSET (default 0x4000).
 	Offset int `yaml:"offset"`
 	// Size is the env partition size, including its CRC32 header. Must match
-	// the host's CONFIG_ENV_SIZE (default 0x4000).
+	// the host's CONFIG_ENV_SIZE exactly (default 0x2000) — it is the CRC
+	// length, not just a bound, so a mismatch makes U-Boot reject an otherwise
+	// intact environment with "bad CRC, using default environment". Clamped at
+	// SMBIOS.Offset so the region cannot overrun the tables above it.
 	Size int `yaml:"size"`
 	// SnapshotPath is a durable file mirroring the env region. The kernel
 	// i2c-slave-eeprom backing the EEPROM is volatile RAM wiped on every BMC

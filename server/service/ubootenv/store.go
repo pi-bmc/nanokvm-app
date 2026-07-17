@@ -4,16 +4,23 @@ package ubootenv
 // rather than a file inside the boot image.
 //
 // U-Boot (CONFIG_ENV_IS_IN_EEPROM) keeps its environment at a fixed offset of
-// the same 24c256 that holds the UEFI variable store:
+// the same 24c256 that holds the UEFI variable store and the SMBIOS tables:
 //
 //	0x0000..0x3fff  UEFI variable blob (see the efivars package)
-//	0x4000..0x7fff  U-Boot environment (this store)
+//	0x4000..0x5fff  U-Boot environment (this store)
+//	0x6000..0x67ff  SMBIOS tables (see the smbios package)
 //
 // The region is a complete env partition in U-Boot's binary format: a 4-byte
 // little-endian CRC32 followed by NUL-terminated key=value entries and NUL
 // padding. The CRC covers the entire payload *including* the padding, so
 // reads and writes always span the full region — there is no length header to
 // short-circuit on, unlike the UEFI blob.
+//
+// That also makes the region size load-bearing rather than a mere bound: it
+// must equal the host's CONFIG_ENV_SIZE, because both sides checksum
+// size-4 bytes. A size that disagrees makes U-Boot reject an intact
+// environment with "bad CRC, using default environment"; config clamps the
+// value at the SMBIOS offset to keep the two in step.
 //
 // The EEPROM the host talks to is emulated by the kernel i2c-slave-eeprom
 // driver, whose buffer is volatile RAM wiped on every BMC boot. As in
