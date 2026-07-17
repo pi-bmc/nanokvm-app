@@ -12,21 +12,21 @@ import (
 )
 
 const (
-	virtualNetwork = "/boot/usb.rndis0"
+	virtualNetwork = "/boot/usb.ecm0"
 	virtualDisk    = "/boot/usb.disk0"
 )
 
 var (
 	mountNetworkCommands = []string{
-		"touch /boot/usb.rndis0",
+		"touch /boot/usb.ecm0",
 		"/etc/init.d/S03usbdev stop",
 		"/etc/init.d/S03usbdev start",
 	}
 
 	unmountNetworkCommands = []string{
 		"/etc/init.d/S03usbdev stop",
-		"rm -rf /sys/kernel/config/usb_gadget/g0/configs/c.1/rndis.usb0",
-		"rm /boot/usb.rndis0",
+		"rm -rf /sys/kernel/config/usb_gadget/g0/configs/c.1/ecm.usb0",
+		"rm /boot/usb.ecm0",
 		"/etc/init.d/S03usbdev start",
 	}
 

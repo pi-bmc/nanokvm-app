@@ -113,10 +113,10 @@ start_usb_dev(){
         mkdir -p functions/ncm.usb0
         [ -L configs/c.1/ncm.usb0 ] || ln -s functions/ncm.usb0 configs/c.1/
     else
-        if [ -e /boot/usb.rndis0 ]
+        if [ -e /boot/usb.ecm0 ]
         then
-            mkdir -p functions/rndis.usb0
-            [ -L configs/c.1/rndis.usb0 ] || ln -s functions/rndis.usb0 configs/c.1/
+            mkdir -p functions/ecm.usb0
+            [ -L configs/c.1/ecm.usb0 ] || ln -s functions/ecm.usb0 configs/c.1/
         fi
     fi
 
