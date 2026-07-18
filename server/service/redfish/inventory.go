@@ -147,7 +147,14 @@ func applySMBIOSInventory(sys *ComputerSystem) bool {
 		}
 		return false
 	}
+	applySMBIOSInfo(sys, info)
+	return true
+}
 
+// applySMBIOSInfo maps a parsed SMBIOS Info onto the ComputerSystem. It is
+// split from applySMBIOSInventory (which owns the store read) so the mapping
+// can be unit-tested with a fixture Info.
+func applySMBIOSInfo(sys *ComputerSystem, info *smbios.Info) {
 	set(&sys.Manufacturer, info.Manufacturer)
 	set(&sys.Model, info.Product)
 	set(&sys.SerialNumber, info.Serial)
@@ -170,9 +177,21 @@ func applySMBIOSInventory(sys *ComputerSystem) bool {
 		sys.ProcessorSummary = ps
 	}
 
+	// Memory (SMBIOS type 16/17) -> the standard MemorySummary. The total is
+	// the sum of installed modules; the RPi 5 SoC-package DRAM is not mirrored.
+	if info.MemoryTotalMB > 0 {
+		gib := float64(info.MemoryTotalMB) / 1024
+		sys.MemorySummary = &MemorySummary{
+			TotalSystemMemoryGiB: &gib,
+			MemoryMirroring:      schemas.NoneMemoryMirroring,
+			Status:               &Status{State: schemas.EnabledState, Health: schemas.OKHealth},
+		}
+	}
+
 	// Values SMBIOS carries that have no standard ComputerSystem property.
 	// ProcessorSummary in particular has no Manufacturer member — that lives
-	// on an individual Processor resource, which we do not expose.
+	// on an individual Processor resource, which we do not expose; likewise
+	// MemorySummary has no member for the module type, speed or part numbers.
 	oem := oemNanoKVM(sys)
 	oem["InventorySource"] = "SMBIOS"
 	for key, v := range map[string]string{
@@ -184,6 +203,7 @@ func applySMBIOSInventory(sys *ComputerSystem) bool {
 		"BoardSerial":           info.BoardSerial,
 		"ProcessorManufacturer": info.CPUManufacturer,
 		"ProcessorPartNumber":   info.CPUPartNumber,
+		"MemoryErrorCorrection": info.MemoryErrorCorrection,
 		"SMBIOSVersion":         info.SMBIOSVersion,
 	} {
 		if v != "" {
@@ -193,7 +213,24 @@ func applySMBIOSInventory(sys *ComputerSystem) bool {
 	if info.CPUMaxSpeedMHz > 0 {
 		oem["ProcessorMaxSpeedMHz"] = info.CPUMaxSpeedMHz
 	}
-	return true
+	if info.MemorySlots > 0 {
+		oem["MemorySlots"] = info.MemorySlots
+	}
+	if len(info.Memory) > 0 {
+		// A DIMM/package summary alongside the full per-module detail. The
+		// first module's type and speed characterise the array on the RPi 5,
+		// which carries a single soldered package.
+		if t := info.Memory[0].Type; t != "" {
+			oem["MemoryType"] = t
+		}
+		if sp := info.Memory[0].SpeedMTs; sp > 0 {
+			oem["MemorySpeedMTs"] = sp
+		}
+		oem["MemoryDevices"] = info.Memory
+	}
+	if len(info.Slots) > 0 {
+		oem["Slots"] = info.Slots
+	}
 }
 
 // readBoot reports the current boot override as a Redfish Boot block.

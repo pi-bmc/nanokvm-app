@@ -104,6 +104,7 @@ type ComputerSystem struct {
 	HostName         string            `json:"HostName,omitempty"`
 	Status           *Status           `json:"Status,omitempty"`
 	ProcessorSummary *ProcessorSummary `json:"ProcessorSummary,omitempty"`
+	MemorySummary    *MemorySummary    `json:"MemorySummary,omitempty"`
 	Boot             Boot              `json:"Boot"`
 	Bios             *Link             `json:"Bios,omitempty"`
 	Actions          *SystemActions    `json:"Actions,omitempty"`
@@ -127,6 +128,17 @@ type ProcessorSummary struct {
 	Model                 string `json:"Model,omitempty"`
 	CoreCount             *uint  `json:"CoreCount,omitempty"`
 	LogicalProcessorCount *uint  `json:"LogicalProcessorCount,omitempty"`
+}
+
+// MemorySummary mirrors the Redfish ComputerSystem.MemorySummary property set,
+// derived from the SMBIOS type 16/17 tables. TotalSystemMemoryGiB is a pointer
+// so an unknown total is omitted rather than reported as a misleading 0 GiB.
+// Per-module detail (type, speed, part number) has no standard member here and
+// is reported under Oem instead (see inventory.go).
+type MemorySummary struct {
+	TotalSystemMemoryGiB *float64                `json:"TotalSystemMemoryGiB,omitempty"`
+	MemoryMirroring      schemas.MemoryMirroring `json:"MemoryMirroring,omitempty"`
+	Status               *Status                 `json:"Status,omitempty"`
 }
 
 // Boot is the ComputerSystem boot settings block.

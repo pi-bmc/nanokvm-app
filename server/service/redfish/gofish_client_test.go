@@ -10,6 +10,7 @@ package redfish
 // rather than in a customer's terraform run.
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -17,6 +18,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/schemas"
+
+	"github.com/pi-bmc/nanokvm-app/server/service/smbios"
 )
 
 // testServer mounts the read-only surface with no auth so gofish can walk it.
@@ -165,6 +168,46 @@ func TestGofishTrustedComponentsAndSoftwareImage(t *testing.T) {
 	}
 	if !img.Updateable {
 		t.Error("SoftwareInventory should be Updateable (BMC stages pieeprom.upd)")
+	}
+}
+
+// The MemorySummary we synthesise from the SMBIOS type 16/17 tables must be
+// readable by gofish's own ComputerSystem schema — the same contract the rest
+// of this file pins for the live surface. The store is unconfigured under test,
+// so exercise the mapping directly and round-trip the marshalled system.
+func TestGofishParsesMemorySummary(t *testing.T) {
+	sys := ComputerSystem{
+		Resource: Resource{
+			ODataType: "#ComputerSystem.v1_13_0.ComputerSystem",
+			ODataID:   systemPath,
+			ID:        "1",
+			Name:      "Computer System",
+		},
+	}
+	applySMBIOSInfo(&sys, &smbios.Info{
+		MemoryTotalMB: 16384,
+		Memory: []smbios.MemoryModule{{
+			Locator: "P0", SizeMB: 16384, Type: "LPDDR4", SpeedMTs: 4267,
+		}},
+	})
+
+	raw, err := json.Marshal(sys)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var gsys schemas.ComputerSystem
+	if err := json.Unmarshal(raw, &gsys); err != nil {
+		t.Fatalf("gofish cannot parse our ComputerSystem: %v\nbody: %s", err, raw)
+	}
+	if gsys.MemorySummary.TotalSystemMemoryGiB == nil {
+		t.Fatal("gofish read no TotalSystemMemoryGiB")
+	}
+	if got := *gsys.MemorySummary.TotalSystemMemoryGiB; got != 16 {
+		t.Errorf("TotalSystemMemoryGiB round-trip = %v, want 16", got)
+	}
+	if gsys.MemorySummary.MemoryMirroring != schemas.NoneMemoryMirroring {
+		t.Errorf("MemoryMirroring = %q, want None", gsys.MemorySummary.MemoryMirroring)
 	}
 }
 

@@ -37,6 +37,88 @@ func type1(uuid [16]byte, strs ...string) []byte {
 	return b.Bytes()
 }
 
+// le appends v to b in little-endian order (SMBIOS is little-endian).
+func le(b *bytes.Buffer, v any) {
+	if err := binary.Write(b, binary.LittleEndian, v); err != nil {
+		panic(err)
+	}
+}
+
+// type16 builds a Physical Memory Array (length 0x17, no strings). errCorr is
+// the raw SMBIOS Memory Error Correction byte; devices is the socket count.
+func type16(errCorr uint8, devices uint16) []byte {
+	var b bytes.Buffer
+	b.WriteByte(16)            // type
+	b.WriteByte(0x17)          // length
+	le(&b, uint16(0x1000))     // handle
+	b.WriteByte(3)             // location: system board
+	b.WriteByte(3)             // use: system memory
+	b.WriteByte(errCorr)       // memory error correction
+	le(&b, uint32(0x80000000)) // max capacity -> use extended
+	le(&b, uint16(0xFFFE))     // memory error information handle
+	le(&b, devices)            // number of memory devices
+	le(&b, uint64(0))          // extended maximum capacity
+	b.WriteByte(0)             // empty string set: two null bytes
+	b.WriteByte(0)
+	return b.Bytes()
+}
+
+// type17 builds a Memory Device (length 0x28) with the given string set. mem
+// is the raw Memory Type byte, ff the raw Form Factor byte, sizeMB the size.
+func type17(mem, ff uint8, sizeMB uint16, strs ...string) []byte {
+	var b bytes.Buffer
+	b.WriteByte(17)        // type
+	b.WriteByte(0x28)      // length
+	le(&b, uint16(0x1100)) // handle
+	le(&b, uint16(0x1000)) // physical memory array handle
+	le(&b, uint16(0xFFFE)) // memory error information handle
+	le(&b, uint16(32))     // total width
+	le(&b, uint16(32))     // data width
+	le(&b, sizeMB)         // size (MB, bit 15 clear)
+	b.WriteByte(ff)        // form factor
+	b.WriteByte(0)         // device set: none
+	b.WriteByte(1)         // device locator -> string 1
+	b.WriteByte(2)         // bank locator   -> string 2
+	b.WriteByte(mem)       // memory type
+	le(&b, uint16(0x0080)) // type detail: synchronous
+	le(&b, uint16(4267))   // speed (MT/s)
+	b.WriteByte(3)         // manufacturer  -> string 3
+	b.WriteByte(4)         // serial number -> string 4
+	b.WriteByte(0)         // asset tag     -> none
+	b.WriteByte(5)         // part number   -> string 5
+	b.WriteByte(0)         // attributes
+	le(&b, uint32(0))      // extended size
+	le(&b, uint16(4267))   // configured memory speed
+	le(&b, uint16(1100))   // minimum voltage
+	le(&b, uint16(1100))   // maximum voltage
+	le(&b, uint16(1100))   // configured voltage
+	for _, s := range strs {
+		b.WriteString(s)
+		b.WriteByte(0)
+	}
+	b.WriteByte(0) // string-set terminator
+	return b.Bytes()
+}
+
+// type9 builds a System Slot (length 0x0C) whose designation is string 1.
+func type9(designation string) []byte {
+	var b bytes.Buffer
+	b.WriteByte(9)         // type
+	b.WriteByte(0x0C)      // length
+	le(&b, uint16(0x0900)) // handle
+	b.WriteByte(1)         // slot designation -> string 1
+	b.WriteByte(0xA5)      // slot type: PCI Express
+	b.WriteByte(0x08)      // data bus width
+	b.WriteByte(0x03)      // current usage: available
+	b.WriteByte(0x03)      // slot length
+	le(&b, uint16(0))      // slot ID
+	b.WriteByte(0)         // characteristics 1
+	b.WriteString(designation)
+	b.WriteByte(0)
+	b.WriteByte(0) // string-set terminator
+	return b.Bytes()
+}
+
 // endOfTable builds the type 127 terminator.
 func endOfTable() []byte {
 	return []byte{127, 4, 0x7f, 0x00, 0x00, 0x00}
@@ -74,16 +156,32 @@ func buildRegion(t *testing.T, tables []byte) []byte {
 	return region
 }
 
+// concat joins structure blobs into one table stream.
+func concat(parts ...[]byte) []byte {
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
+}
+
 func sampleRegion(t *testing.T) []byte {
 	t.Helper()
 	uuid := [16]byte{
 		0x2e, 0xd6, 0xcc, 0x84, 0x87, 0xe3, 0x46, 0x79,
 		0xb1, 0x41, 0xe0, 0x00, 0x52, 0x50, 0x69, 0x00,
 	}
-	tables := append(
+	tables := concat(
 		type1(uuid, "Raspberry Pi", "Raspberry Pi 5 Model B Rev 1.1", "1.1",
 			"79a6e38784ccd62e", "E04171", "Raspberry Pi"),
-		endOfTable()...)
+		// Single-bit ECC, one memory device; a 16 GiB LPDDR4 "Row of chips"
+		// package; and a PCIe slot. The enum bytes (0x05, 0x1E, 0x0B) are the
+		// exact values go-smbios's own String() would misdecode.
+		type16(0x05, 1),
+		type17(0x1E, 0x0B, 16384, "P0", "CH0", "Micron", "SN12345", "MT53E2G32"),
+		type9("PCIe"),
+		endOfTable(),
+	)
 	return buildRegion(t, tables)
 }
 
@@ -111,6 +209,104 @@ func TestParseSystemInformation(t *testing.T) {
 	// the U-Boot environment.
 	if info.UUID == "" {
 		t.Error("UUID is empty")
+	}
+}
+
+// The type 16/17/9 tables U-Boot now exports must map onto the memory summary
+// and slot inventory, decoding the enum bytes correctly along the way.
+func TestParseMemoryAndSlots(t *testing.T) {
+	info, err := Parse(sampleRegion(t))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if info.MemoryTotalMB != 16384 {
+		t.Errorf("MemoryTotalMB = %d, want 16384", info.MemoryTotalMB)
+	}
+	if info.MemorySlots != 1 {
+		t.Errorf("MemorySlots = %d, want 1", info.MemorySlots)
+	}
+	if info.MemoryErrorCorrection != "Single-bit ECC" {
+		t.Errorf("MemoryErrorCorrection = %q, want Single-bit ECC", info.MemoryErrorCorrection)
+	}
+	if len(info.Slots) != 1 || info.Slots[0] != "PCIe" {
+		t.Errorf("Slots = %v, want [PCIe]", info.Slots)
+	}
+
+	if len(info.Memory) != 1 {
+		t.Fatalf("Memory has %d modules, want 1", len(info.Memory))
+	}
+	m := info.Memory[0]
+	for _, tc := range []struct{ name, got, want string }{
+		{"Type", m.Type, "LPDDR4"},
+		{"FormFactor", m.FormFactor, "Row of chips"},
+		{"Manufacturer", m.Manufacturer, "Micron"},
+		{"PartNumber", m.PartNumber, "MT53E2G32"},
+		{"SerialNumber", m.SerialNumber, "SN12345"},
+		{"Locator", m.Locator, "P0"},
+		{"BankLocator", m.BankLocator, "CH0"},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("Memory[0].%s = %q, want %q", tc.name, tc.got, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		name      string
+		got, want int
+	}{
+		{"SizeMB", m.SizeMB, 16384},
+		{"SpeedMTs", m.SpeedMTs, 4267},
+		{"ConfiguredSpeedMTs", m.ConfiguredSpeedMTs, 4267},
+		{"DataWidthBits", m.DataWidthBits, 32},
+		{"TotalWidthBits", m.TotalWidthBits, 32},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("Memory[0].%s = %d, want %d", tc.name, tc.got, tc.want)
+		}
+	}
+}
+
+// go-smbios v0.3.4 mis-decodes these enums (it indexes from 0 while SMBIOS
+// numbers from 0x01), so our decoders own the mapping. Pin the values that
+// would otherwise shift, and confirm the placeholders resolve to "".
+func TestMemoryEnumDecodersMatchSpec(t *testing.T) {
+	for _, tc := range []struct {
+		raw  int
+		want string
+	}{
+		{0x1E, "LPDDR4"}, // go-smbios would say "HBM2"
+		{0x1A, "DDR4"},   // go-smbios would say "LPDDR3"
+		{0x22, "DDR5"},
+		{0x23, "LPDDR5"},
+		{0x01, ""}, // Other
+		{0x02, ""}, // Unknown
+		{0x15, ""}, // Reserved
+		{0x17, ""}, // Reserved
+	} {
+		if got := memoryTypeName(tc.raw); got != tc.want {
+			t.Errorf("memoryTypeName(%#x) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+
+	if got := formFactorName(0x0B); got != "Row of chips" { // go-smbios: "RIMM"
+		t.Errorf("formFactorName(0x0B) = %q, want Row of chips", got)
+	}
+	if got := formFactorName(0x0D); got != "SODIMM" { // go-smbios: "SRIMM"
+		t.Errorf("formFactorName(0x0D) = %q, want SODIMM", got)
+	}
+
+	for _, tc := range []struct {
+		raw  int
+		want string
+	}{
+		{0x02, ""},               // Unknown — go-smbios: "None"
+		{0x03, "None"},           // go-smbios: "Parity"
+		{0x05, "Single-bit ECC"}, // go-smbios: "Multi-bit ECC"
+		{0x06, "Multi-bit ECC"},
+	} {
+		if got := memoryErrorCorrectionName(tc.raw); got != tc.want {
+			t.Errorf("memoryErrorCorrectionName(%#x) = %q, want %q", tc.raw, got, tc.want)
+		}
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/smbios"
 )
 
 // readBoot converts an efivars.BootTarget straight into a schemas.BootSource,
@@ -94,6 +95,83 @@ func TestOemNanoKVMIsCreatedOnceAndTyped(t *testing.T) {
 	}
 	if block["@odata.type"] != "#NanoKVM.v1_0_0.ComputerSystem" {
 		t.Errorf("Oem block missing @odata.type, got %v", block["@odata.type"])
+	}
+}
+
+// applySMBIOSInfo must project the SMBIOS memory tables onto the standard
+// ComputerSystem.MemorySummary, and route the detail with no standard property
+// (module type/speed, ECC, sockets, per-module list, slots) to Oem.
+func TestApplySMBIOSInfoMemory(t *testing.T) {
+	var sys ComputerSystem
+	info := &smbios.Info{
+		MemoryTotalMB:         16384,
+		MemoryErrorCorrection: "Single-bit ECC",
+		MemorySlots:           1,
+		Memory: []smbios.MemoryModule{{
+			Locator:      "P0",
+			SizeMB:       16384,
+			Type:         "LPDDR4",
+			FormFactor:   "Row of chips",
+			SpeedMTs:     4267,
+			Manufacturer: "Micron",
+			PartNumber:   "MT53E2G32",
+		}},
+		Slots: []string{"PCIe"},
+	}
+
+	applySMBIOSInfo(&sys, info)
+
+	if sys.MemorySummary == nil {
+		t.Fatal("MemorySummary not set")
+	}
+	if sys.MemorySummary.TotalSystemMemoryGiB == nil {
+		t.Fatal("TotalSystemMemoryGiB nil")
+	}
+	if got := *sys.MemorySummary.TotalSystemMemoryGiB; got != 16 {
+		t.Errorf("TotalSystemMemoryGiB = %v, want 16", got)
+	}
+	if sys.MemorySummary.MemoryMirroring != schemas.NoneMemoryMirroring {
+		t.Errorf("MemoryMirroring = %q, want None", sys.MemorySummary.MemoryMirroring)
+	}
+	if sys.MemorySummary.Status == nil ||
+		sys.MemorySummary.Status.State != schemas.EnabledState ||
+		sys.MemorySummary.Status.Health != schemas.OKHealth {
+		t.Errorf("Status = %+v, want Enabled/OK", sys.MemorySummary.Status)
+	}
+
+	oem := oemNanoKVM(&sys)
+	for key, want := range map[string]any{
+		"MemoryErrorCorrection": "Single-bit ECC",
+		"MemorySlots":           1,
+		"MemoryType":            "LPDDR4",
+		"MemorySpeedMTs":        4267,
+	} {
+		if oem[key] != want {
+			t.Errorf("Oem[%q] = %v, want %v", key, oem[key], want)
+		}
+	}
+	if _, ok := oem["MemoryDevices"].([]smbios.MemoryModule); !ok {
+		t.Errorf("Oem[MemoryDevices] is %T, want []smbios.MemoryModule", oem["MemoryDevices"])
+	}
+	if slots, ok := oem["Slots"].([]string); !ok || len(slots) != 1 || slots[0] != "PCIe" {
+		t.Errorf("Oem[Slots] = %v, want [PCIe]", oem["Slots"])
+	}
+}
+
+// A board that carries no memory tables (older firmware, blank region) must not
+// invent a MemorySummary or any memory Oem keys.
+func TestApplySMBIOSInfoNoMemory(t *testing.T) {
+	var sys ComputerSystem
+	applySMBIOSInfo(&sys, &smbios.Info{Manufacturer: "Raspberry Pi"})
+
+	if sys.MemorySummary != nil {
+		t.Errorf("MemorySummary = %+v, want nil", sys.MemorySummary)
+	}
+	oem := oemNanoKVM(&sys)
+	for _, key := range []string{"MemoryType", "MemorySlots", "MemoryDevices", "Slots"} {
+		if _, present := oem[key]; present {
+			t.Errorf("Oem[%q] present with no memory tables", key)
+		}
 	}
 }
 

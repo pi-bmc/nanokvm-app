@@ -108,8 +108,43 @@ type Info struct {
 	CPUThreads      int    `json:"cpuThreads,omitempty"`
 	CPUMaxSpeedMHz  int    `json:"cpuMaxSpeedMHz,omitempty"`
 
+	// Type 16 - Physical Memory Array (the aggregate the devices belong to).
+	// MemoryErrorCorrection is "" when the array reports the SMBIOS placeholder
+	// values (Unknown/Other), which carry no inventory value.
+	MemoryErrorCorrection string `json:"memoryErrorCorrection,omitempty"`
+	MemorySlots           int    `json:"memorySlots,omitempty"`
+
+	// Type 17 - Memory Devices. MemoryTotalMB is the sum of the installed
+	// modules; Memory carries the per-module detail.
+	MemoryTotalMB int            `json:"memoryTotalMB,omitempty"`
+	Memory        []MemoryModule `json:"memory,omitempty"`
+
+	// Type 9 - System Slots (designations only; go-smbios exposes no more).
+	Slots []string `json:"slots,omitempty"`
+
 	// SMBIOSVersion is the spec version the host reported, e.g. "3.7.0".
 	SMBIOSVersion string `json:"smbiosVersion,omitempty"`
+}
+
+// MemoryModule is one populated Type 17 Memory Device. Fields are omitted when
+// the device leaves them blank or reports an SMBIOS "Unknown"/"Other"
+// placeholder, so an unpopulated attribute never shows up as a misleading zero
+// or literal "Unknown". JSON tags are PascalCase because the only place these
+// surface is a Redfish Oem block (see redfish/inventory.go).
+type MemoryModule struct {
+	Locator            string `json:"Locator,omitempty"`
+	BankLocator        string `json:"BankLocator,omitempty"`
+	SizeMB             int    `json:"SizeMB,omitempty"`
+	Type               string `json:"Type,omitempty"`
+	FormFactor         string `json:"FormFactor,omitempty"`
+	SpeedMTs           int    `json:"SpeedMTs,omitempty"`
+	ConfiguredSpeedMTs int    `json:"ConfiguredSpeedMTs,omitempty"`
+	Manufacturer       string `json:"Manufacturer,omitempty"`
+	PartNumber         string `json:"PartNumber,omitempty"`
+	SerialNumber       string `json:"SerialNumber,omitempty"`
+	AssetTag           string `json:"AssetTag,omitempty"`
+	DataWidthBits      int    `json:"DataWidthBits,omitempty"`
+	TotalWidthBits     int    `json:"TotalWidthBits,omitempty"`
 }
 
 // Store reads the SMBIOS tables from a fixed [offset, offset+size) region of
@@ -243,7 +278,222 @@ func infoFrom(s *gosmbios.SMBIOS, v gosmbios.Version) *Info {
 		info.CPUMaxSpeedMHz = int(p.MaxSpeed)
 	}
 
+	// Type 17 - Memory Devices. Sum the installed sizes for the summary and
+	// keep the per-module detail. An empty socket (size 0) or an unknown size
+	// contributes nothing and carries no identity worth reporting.
+	//
+	// The enum fields (type, form factor) are decoded from the raw SMBIOS byte
+	// rather than through go-smbios's String() methods — see the decoder
+	// helpers for why those cannot be trusted here.
+	for i := range s.MemoryDevices {
+		d := &s.MemoryDevices[i]
+		mb := memoryDeviceMB(d)
+		if mb == 0 {
+			continue
+		}
+		info.MemoryTotalMB += mb
+		info.Memory = append(info.Memory, MemoryModule{
+			Locator:            d.DeviceLocator,
+			BankLocator:        d.BankLocator,
+			SizeMB:             mb,
+			Type:               memoryTypeName(int(d.MemoryType)),
+			FormFactor:         formFactorName(int(d.FormFactor)),
+			SpeedMTs:           speedMTs(d.Speed),
+			ConfiguredSpeedMTs: speedMTs(d.ConfiguredMemorySpeed),
+			Manufacturer:       d.Manufacturer,
+			PartNumber:         d.PartNumber,
+			SerialNumber:       d.SerialNumber,
+			AssetTag:           d.AssetTag,
+			DataWidthBits:      widthBits(d.DataWidth),
+			TotalWidthBits:     widthBits(d.TotalWidth),
+		})
+	}
+
+	// Type 16 - Physical Memory Array. go-smbios zero-values this struct when
+	// no type 16 is present, so only trust it alongside the type 17 devices it
+	// aggregates.
+	if len(s.MemoryDevices) > 0 {
+		info.MemoryErrorCorrection = memoryErrorCorrectionName(int(s.PhysicalMemoryArray.MemoryErrorCorrection))
+		info.MemorySlots = int(s.PhysicalMemoryArray.NumberOfMemoryDevices)
+	}
+
+	// Type 9 - System Slots.
+	for i := range s.SystemSlots {
+		if d := s.SystemSlots[i].SlotDesignation; d != "" {
+			info.Slots = append(info.Slots, d)
+		}
+	}
+
 	return info
+}
+
+// memoryDeviceMB returns a memory device's installed size in megabytes, or 0
+// for an empty socket or an unknown size. It mirrors the SMBIOS size encoding:
+// bit 15 of Size selects KB vs MB (go-smbios's Megabytes handles that), and
+// 0x7FFF defers to the 32-bit Extended Size, which the spec expresses in
+// megabytes.
+func memoryDeviceMB(d *gosmbios.MemoryDevice) int {
+	switch d.Size {
+	case 0, 0xFFFF:
+		return 0
+	case 0x7FFF:
+		return int(d.ExtendedSize)
+	default:
+		return d.Size.Megabytes()
+	}
+}
+
+// speedMTs returns a memory speed in MT/s, or 0 when the device reports the
+// SMBIOS unknown (0) or "see extended speed" (0xFFFF) sentinels.
+func speedMTs(s gosmbios.MemoryDeviceSpeed) int {
+	if s == 0 || s == 0xFFFF {
+		return 0
+	}
+	return int(s)
+}
+
+// widthBits returns a memory device data/total width in bits, or 0 for the
+// SMBIOS unknown sentinel (0xFFFF).
+func widthBits(w gosmbios.MemoryDeviceWidth) int {
+	if w == 0xFFFF {
+		return 0
+	}
+	return int(w)
+}
+
+// The three enum decoders below intentionally do NOT go through go-smbios's
+// String() methods. go-smbios v0.3.4 numbers its enum constants from zero,
+// while SMBIOS (DSP0134) numbers these enumerations from 0x01 and skips
+// reserved ranges. Decoding the spec-compliant bytes U-Boot writes through
+// go-smbios therefore yields values shifted by one or more — a real LPDDR4
+// module reads back as "HBM2", a "Row of chips" package as "RIMM", and ECC
+// "Unknown" as "None". We map the raw bytes ourselves, and return "" for the
+// Other/Unknown/Reserved placeholders so they never surface as inventory.
+
+// memoryTypeName maps an SMBIOS Memory Device "Memory Type" byte (DSP0134
+// 7.18.2) to a name. The spellings match the Redfish MemoryDeviceType enum
+// where the two overlap (e.g. "DDR4", "LPDDR4").
+func memoryTypeName(b int) string {
+	switch b {
+	case 0x03:
+		return "DRAM"
+	case 0x04:
+		return "EDRAM"
+	case 0x05:
+		return "VRAM"
+	case 0x06:
+		return "SRAM"
+	case 0x07:
+		return "RAM"
+	case 0x08:
+		return "ROM"
+	case 0x09:
+		return "FLASH"
+	case 0x0A:
+		return "EEPROM"
+	case 0x0B:
+		return "FEPROM"
+	case 0x0C:
+		return "EPROM"
+	case 0x0D:
+		return "CDRAM"
+	case 0x0E:
+		return "3DRAM"
+	case 0x0F:
+		return "SDRAM"
+	case 0x10:
+		return "SGRAM"
+	case 0x11:
+		return "RDRAM"
+	case 0x12:
+		return "DDR"
+	case 0x13:
+		return "DDR2"
+	case 0x14:
+		return "DDR2 FB-DIMM"
+	case 0x18:
+		return "DDR3"
+	case 0x19:
+		return "FBD2"
+	case 0x1A:
+		return "DDR4"
+	case 0x1B:
+		return "LPDDR"
+	case 0x1C:
+		return "LPDDR2"
+	case 0x1D:
+		return "LPDDR3"
+	case 0x1E:
+		return "LPDDR4"
+	case 0x1F:
+		return "Logical non-volatile device"
+	case 0x20:
+		return "HBM"
+	case 0x21:
+		return "HBM2"
+	case 0x22:
+		return "DDR5"
+	case 0x23:
+		return "LPDDR5"
+	default: // 0x01 Other, 0x02 Unknown, 0x15-0x17 Reserved, unknown
+		return ""
+	}
+}
+
+// formFactorName maps an SMBIOS Memory Device "Form Factor" byte (DSP0134
+// 7.18.1) to a name. The RPi 5's soldered package reports "Row of chips".
+func formFactorName(b int) string {
+	switch b {
+	case 0x03:
+		return "SIMM"
+	case 0x04:
+		return "SIP"
+	case 0x05:
+		return "Chip"
+	case 0x06:
+		return "DIP"
+	case 0x07:
+		return "ZIP"
+	case 0x08:
+		return "Proprietary Card"
+	case 0x09:
+		return "DIMM"
+	case 0x0A:
+		return "TSOP"
+	case 0x0B:
+		return "Row of chips"
+	case 0x0C:
+		return "RIMM"
+	case 0x0D:
+		return "SODIMM"
+	case 0x0E:
+		return "SRIMM"
+	case 0x0F:
+		return "FB-DIMM"
+	case 0x10:
+		return "Die"
+	default: // 0x01 Other, 0x02 Unknown, unknown
+		return ""
+	}
+}
+
+// memoryErrorCorrectionName maps an SMBIOS Physical Memory Array "Memory Error
+// Correction" byte (DSP0134 7.17.3) to a name.
+func memoryErrorCorrectionName(b int) string {
+	switch b {
+	case 0x03:
+		return "None"
+	case 0x04:
+		return "Parity"
+	case 0x05:
+		return "Single-bit ECC"
+	case 0x06:
+		return "Multi-bit ECC"
+	case 0x07:
+		return "CRC"
+	default: // 0x01 Other, 0x02 Unknown, unknown
+		return ""
+	}
 }
 
 // checksumOK verifies the entry point's 8-bit sum-to-zero checksum.
