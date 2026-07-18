@@ -42,6 +42,7 @@ dist/server/NanoKVM-Server:
 	@mkdir -p dist/server
 	@go mod tidy
 	@CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -o ./dist/server/NanoKVM-Server ./cmd/server
+	@upx -q -v ./dist/server/NanoKVM-Server
 
 dist/fw_env/fw_env:
 	@echo "Creating fw_env output directory..."
