@@ -1,11 +1,17 @@
 package firmware
 
-// bootloader.go bridges the UEFI variables U-Boot publishes over I2C
-// (server/service/bootloader) into the BMC's EEPROM handling.
+// bootloader.go assembles the running bootloader's provenance from the two
+// out-of-band channels U-Boot publishes over I2C.
 //
-// U-Boot no longer dumps pieeprom.bin to the FAT, so the live bootloader
-// config and the rpi-eeprom git version now come from those variables. The
-// BMC owns the pieeprom.upd/.sig/recovery file lifecycle on the FAT itself.
+// The rpi-eeprom's identity — its build version and git hash — rides in the
+// SMBIOS Type 45 Firmware Inventory (server/service/smbios). Those fields are
+// free-form strings there, so the version is carried exactly rather than
+// squeezed into the byte-wide release fields of SMBIOS Type 0 (which describes
+// U-Boot itself, not the eeprom).
+//
+// The live EEPROM config and flash time still come from the UEFI variables
+// (server/service/bootloader); U-Boot no longer dumps pieeprom.bin to the FAT,
+// and the BMC owns the pieeprom.upd/.sig/recovery file lifecycle itself.
 
 import (
 	"errors"
@@ -14,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pi-bmc/nanokvm-app/server/service/bootloader"
+	"github.com/pi-bmc/nanokvm-app/server/service/smbios"
 )
 
 // eepromAppliedMarker is the file the Pi firmware leaves on the FAT after it
@@ -22,11 +29,21 @@ import (
 // now does.
 const eepromAppliedMarker = "recovery.000"
 
-// BootloaderProvenance is the running bootloader's identity, mirrored by
-// U-Boot from the firmware device tree into UEFI variables.
+// BootloaderProvenance is the running bootloader's identity, assembled from the
+// SMBIOS Type 45 firmware inventory and the UEFI variables U-Boot publishes.
 type BootloaderProvenance struct {
+	// Version is the rpi-eeprom build version as an ISO date "YYYY-MM-DD".
+	// The eeprom is date-versioned, so its build date is its version. From
+	// the SMBIOS Type 45 firmware inventory; empty when the host has not
+	// published one.
+	Version string
+	// ReleaseDate is the component's release date as SMBIOS reports it
+	// (an ISO date), or "" when absent.
+	ReleaseDate string
 	// GitVersion is the rpi-eeprom git hash (/chosen/bootloader/version),
-	// distinct from the build-date "Version" the EEPROM image carries.
+	// distinct from the date-based Version. It comes from the Type 45
+	// firmware ID; older U-Boot published it as a UEFI variable instead, so
+	// that is kept as a fallback.
 	GitVersion string
 	// Config is the live EEPROM bootconf text (the running configuration).
 	Config string
@@ -34,32 +51,45 @@ type BootloaderProvenance struct {
 	UpdatedUnix int64
 }
 
-// Available reports whether U-Boot reported any provenance.
+// Available reports whether anything reported the bootloader's provenance.
 func (p BootloaderProvenance) Available() bool {
-	return p.GitVersion != "" || p.Config != "" || p.UpdatedUnix != 0
+	return p.Version != "" || p.GitVersion != "" || p.Config != "" ||
+		p.UpdatedUnix != 0
 }
 
-// GetBootloaderProvenance reads the bootloader variables U-Boot publishes over
-// I2C. It returns a zero value (not an error) when the variable store is
-// unavailable, so callers treat missing provenance as "not reported yet"
-// rather than as a failure.
+// GetBootloaderProvenance merges the SMBIOS Type 45 firmware inventory (the
+// version and git hash) with the UEFI variables (the live config and flash
+// time). Each source is optional: a missing one leaves its fields empty rather
+// than failing, so callers treat absent provenance as "not reported yet".
 func (c *Controller) GetBootloaderProvenance() BootloaderProvenance {
+	var prov BootloaderProvenance
+
+	// SMBIOS Type 45 - the running firmware's version and identifier.
+	if info, err := smbios.GetStore().Load(); err == nil &&
+		len(info.FirmwareInventory) > 0 {
+		fw := info.FirmwareInventory[0]
+		prov.Version = fw.Version
+		prov.ReleaseDate = fw.ReleaseDate
+		prov.GitVersion = fw.ID
+	}
+
+	// UEFI variables - the live config and flash time (plus the git hash on
+	// firmware that predates the Type 45 carriage).
 	info, err := bootloader.GetStore().Load()
 	if err != nil {
 		if !errors.Is(err, bootloader.ErrNotConfigured) {
 			log.Warnf("firmware: reading bootloader variables: %v", err)
 		}
-		return BootloaderProvenance{}
+		return prov
 	}
-	var updated int64
+	prov.Config = info.Config
 	if !info.UpdatedAt.IsZero() {
-		updated = info.UpdatedAt.Unix()
+		prov.UpdatedUnix = info.UpdatedAt.Unix()
 	}
-	return BootloaderProvenance{
-		GitVersion:  info.Version,
-		Config:      info.Config,
-		UpdatedUnix: updated,
+	if prov.GitVersion == "" {
+		prov.GitVersion = info.Version
 	}
+	return prov
 }
 
 // reconcilePieepromFiles removes staged EEPROM update files once the firmware

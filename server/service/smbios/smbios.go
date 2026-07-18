@@ -26,6 +26,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,11 +96,14 @@ type Info struct {
 	BIOSVendor  string `json:"biosVendor,omitempty"`
 	BIOSVersion string `json:"biosVersion,omitempty"`
 	BIOSDate    string `json:"biosDate,omitempty"`
-	// ECFirmwareVersion is the Type 0 Embedded Controller firmware release
-	// (offsets 16h/17h) as "major.minor". On this platform U-Boot encodes the
-	// rpi-eeprom boot firmware release there as year.month; the full flash date
-	// is in BIOSDate. Empty when the fields report the 0xff "unknown" sentinel.
-	ECFirmwareVersion string `json:"ecFirmwareVersion,omitempty"`
+	// BootFirmwareVersion is a convenience view of the first FirmwareInventory
+	// entry's Version — on this platform the rpi-eeprom boot firmware, as an
+	// ISO 8601 date "YYYY-MM-DD". Empty when the host reports no Type 45.
+	BootFirmwareVersion string `json:"bootFirmwareVersion,omitempty"`
+
+	// Type 45 - Firmware Inventory Information. The firmware images the host
+	// reports; the rpi-eeprom bootloader is the one this platform publishes.
+	FirmwareInventory []FirmwareComponent `json:"firmwareInventory,omitempty"`
 
 	// Type 2 - Baseboard Information.
 	BoardManufacturer string `json:"boardManufacturer,omitempty"`
@@ -129,6 +134,27 @@ type Info struct {
 
 	// SMBIOSVersion is the spec version the host reported, e.g. "3.7.0".
 	SMBIOSVersion string `json:"smbiosVersion,omitempty"`
+}
+
+// FirmwareComponent is one Type 45 Firmware Inventory Information structure —
+// a firmware image the host carries. Unlike the byte-wide release fields of
+// Type 0, every identifying field here is a free-form string, so a component
+// versioned by date or by a git hash is reported exactly.
+type FirmwareComponent struct {
+	// Name is the component name, e.g. "Raspberry Pi Boot Firmware".
+	Name string `json:"name,omitempty"`
+	// Version is RawVersion normalised: an ISO date "YYYY-MM-DD" when the
+	// firmware is date-versioned in the "YYYY.MMDD" form U-Boot writes for
+	// the rpi-eeprom, otherwise the raw string unchanged.
+	Version string `json:"version,omitempty"`
+	// RawVersion is the version exactly as SMBIOS carries it, e.g. "2026.525".
+	RawVersion string `json:"rawVersion,omitempty"`
+	// ID identifies the image — the rpi-eeprom git hash on this platform.
+	ID string `json:"id,omitempty"`
+	// ReleaseDate is the component's release date as the host reported it.
+	ReleaseDate string `json:"releaseDate,omitempty"`
+	// Manufacturer of the firmware image.
+	Manufacturer string `json:"manufacturer,omitempty"`
 }
 
 // MemoryModule is one populated Type 17 Memory Device. Fields are omitted when
@@ -268,8 +294,6 @@ func infoFrom(s *gosmbios.SMBIOS, v gosmbios.Version) *Info {
 		BIOSVersion: s.BIOSInformation.Version,
 		BIOSDate:    s.BIOSInformation.ReleaseDate,
 
-		ECFirmwareVersion: ecFirmwareVersion(s),
-
 		BoardManufacturer: s.BaseboardInformation.Manufacturer,
 		BoardProduct:      s.BaseboardInformation.Product,
 		BoardSerial:       s.BaseboardInformation.SerialNumber,
@@ -331,31 +355,93 @@ func infoFrom(s *gosmbios.SMBIOS, v gosmbios.Version) *Info {
 		}
 	}
 
+	// Type 45 - Firmware Inventory. This platform publishes exactly one
+	// component (the rpi-eeprom bootloader), so the first entry backs the
+	// BootFirmwareVersion convenience field.
+	info.FirmwareInventory = firmwareInventory(s)
+	if len(info.FirmwareInventory) > 0 {
+		info.BootFirmwareVersion = info.FirmwareInventory[0].Version
+	}
+
 	return info
 }
 
-// ecFirmwareVersion extracts the Type 0 Embedded Controller firmware release
-// (SMBIOS offsets 16h/17h) as "major.minor". go-smbios does not surface these
-// bytes, so read them from the raw structure's Formatted area (which begins at
-// offset 0x04, so 16h/17h are Formatted[0x12]/[0x13]). Returns "" when Type 0
-// is absent, too short to include the fields, or reports the 0xff/0xff
-// "unknown" sentinel.
-func ecFirmwareVersion(s *gosmbios.SMBIOS) string {
-	const ecMajorIdx, ecMinorIdx = 0x16 - 0x04, 0x17 - 0x04
+// firmwareInventory decodes the Type 45 Firmware Inventory Information
+// structures. go-smbios has no typed accessor for Type 45, so read the raw
+// structure: Formatted begins at offset 0x04, and each string field holds a
+// 1-based index into the structure's string set (0 meaning "no string").
+func firmwareInventory(s *gosmbios.SMBIOS) []FirmwareComponent {
+	// Offsets within Formatted, i.e. the SMBIOS offset less the 4-byte header.
+	const (
+		typeFirmwareInventory = 45
+		offComponentName      = 0x04 - 0x04
+		offVersion            = 0x05 - 0x04
+		offFirmwareID         = 0x07 - 0x04
+		offReleaseDate        = 0x09 - 0x04
+		offManufacturer       = 0x0a - 0x04
+	)
+
+	var out []FirmwareComponent
 	for _, st := range s.Structures {
-		if st == nil || st.Header.Type != 0 { // Type 0 - BIOS Information
+		if st == nil || st.Header.Type != typeFirmwareInventory {
 			continue
 		}
-		if len(st.Formatted) <= ecMinorIdx {
-			return ""
+		// Too short to carry the fields we read; skip rather than panic.
+		if len(st.Formatted) <= offManufacturer {
+			continue
 		}
-		major, minor := st.Formatted[ecMajorIdx], st.Formatted[ecMinorIdx]
-		if major == 0xff && minor == 0xff {
-			return ""
+
+		raw := smbiosString(st.Strings, st.Formatted[offVersion])
+		version := isoFromCompactDate(raw)
+		if version == "" {
+			version = raw // not date-versioned; report it unchanged
 		}
-		return fmt.Sprintf("%d.%02d", major, minor)
+
+		out = append(out, FirmwareComponent{
+			Name:         smbiosString(st.Strings, st.Formatted[offComponentName]),
+			Version:      version,
+			RawVersion:   raw,
+			ID:           smbiosString(st.Strings, st.Formatted[offFirmwareID]),
+			ReleaseDate:  smbiosString(st.Strings, st.Formatted[offReleaseDate]),
+			Manufacturer: smbiosString(st.Strings, st.Formatted[offManufacturer]),
+		})
 	}
-	return ""
+	return out
+}
+
+// smbiosString resolves an SMBIOS string reference: a 1-based index into the
+// structure's string set, where 0 means the field carries no string.
+func smbiosString(strs []string, ref byte) string {
+	if ref == 0 || int(ref) > len(strs) {
+		return ""
+	}
+	return strings.TrimSpace(strs[ref-1])
+}
+
+// isoFromCompactDate converts the date-versioned "YYYY.MMDD" form U-Boot writes
+// for the rpi-eeprom — the year, then the month with the day as the right two
+// digits ("2026.525", "2026.1202") — into an ISO date "YYYY-MM-DD". Returns ""
+// when v is not that form, so firmware versioned some other way keeps its raw
+// string. The round-trip through time.Parse rejects impossible dates (02/30).
+func isoFromCompactDate(v string) string {
+	yStr, mdStr, ok := strings.Cut(v, ".")
+	if !ok {
+		return ""
+	}
+	year, err := strconv.Atoi(yStr)
+	if err != nil {
+		return ""
+	}
+	md, err := strconv.Atoi(mdStr)
+	if err != nil {
+		return ""
+	}
+
+	t, err := time.Parse("2006-1-2", fmt.Sprintf("%d-%d-%d", year, md/100, md%100))
+	if err != nil {
+		return ""
+	}
+	return t.Format("2006-01-02")
 }
 
 // memoryDeviceMB returns a memory device's installed size in megabytes, or 0

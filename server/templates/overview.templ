@@ -99,12 +99,20 @@ templ overviewServerCard() {
 			@kvRow("Board", "info-board")
 			@kvRow("Vendor", "info-vendor")
 			@kvRow("CPU / SoC", "info-cpu")
+			@kvRow("Memory", "info-memory")
 			@kvRow("Serial", "info-board-serial")
 			@kvRow("Revision", "info-board-rev")
 			@kvRow("Board MAC", "info-board-mac")
 		}
+		// The service merges SMBIOS over the U-Boot env and reports which
+		// won in Oem.NanoKVM.InventorySource, so the footer names the
+		// actual source rather than assuming machine.env.
 		@card.Footer(card.FooterProps{Class: "pt-2 text-[0.6875rem] text-muted-foreground"}) {
-			Read from U-Boot machine.env on the managed server.
+			// templ trims text nodes, so spacing around the injected span and
+			// the link comes from margin utilities — same as the BMC card's
+			// interfaces footer.
+			Read from<span id="info-inventory-source" class="mx-1">the managed server</span>via
+			<a href="/redfish/v1/Systems/1" target="_blank" rel="noopener noreferrer" class="ml-1 underline underline-offset-4 hover:text-foreground">Redfish</a>.
 		}
 	}
 }
@@ -148,7 +156,6 @@ templ overviewBmcCard() {
 			@kvRow("Image", "info-image")
 			@kvRow("Hardware", "info-hw")
 			@kvRow("IP Address", "info-ip")
-			@kvRow("MAC", "info-mac")
 		}
 		@card.Footer(card.FooterProps{Class: "pt-2 text-xs text-muted-foreground"}) {
 			Interfaces: IPMI :623 · <a href="/redfish/v1" target="_blank" rel="noopener noreferrer" class="ml-1 underline underline-offset-4 hover:text-foreground">Redfish</a>

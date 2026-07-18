@@ -5,7 +5,8 @@ package redfish
 //
 //	0x0000  UEFI variables    -> Boot (BootNext, BootOrder)
 //	0x4000  U-Boot environment -> ComputerSystem identity (fallback)
-//	0x6000  SMBIOS tables      -> ComputerSystem identity (preferred)
+//	0x6000  SMBIOS tables      -> ComputerSystem identity (preferred),
+//	                             plus the type 45 firmware inventory
 //
 // SMBIOS wins where both carry a value: it is the byte-for-byte source the
 // booted OS itself reads, and it carries the UUID, the full product name and
@@ -110,10 +111,21 @@ func applyEnvInventory(sys *ComputerSystem) bool {
 	if err != nil || len(inv) == 0 {
 		return false
 	}
+	applyEnvInfo(sys, inv)
+	return true
+}
 
+// applyEnvInfo maps a machine.env inventory map onto the ComputerSystem. It
+// is split from applyEnvInventory (which owns the controller read) so the
+// mapping can be unit-tested with a fixture map, matching applySMBIOSInfo.
+func applyEnvInfo(sys *ComputerSystem, inv map[string]string) {
 	set(&sys.Model, inv["board_name"])
 	set(&sys.SerialNumber, inv["serial#"])
 	set(&sys.Manufacturer, inv["vendor"])
+	// SMBIOS type-1 Version is the board revision and lands in SubModel (see
+	// applySMBIOSInfo); board_revision is the env's equivalent, so it takes
+	// the same slot when the tables are absent.
+	set(&sys.SubModel, inv["board_revision"])
 	// ComputerSystem has no "FirmwareVersion" property — BiosVersion is the
 	// standard slot for the boot firmware's version, and it is what gofish
 	// and bmclib read. The pre-migration code emitted FirmwareVersion, which
@@ -126,12 +138,21 @@ func applyEnvInventory(sys *ComputerSystem) bool {
 	// Redfish models NICs as an EthernetInterfaces collection, which we do
 	// not expose; there is no ComputerSystem.MACAddress. Report it under Oem
 	// rather than inventing a top-level property.
-	if mac := inv["ethaddr"]; mac != "" {
-		oemNanoKVM(sys)["MACAddress"] = mac
+	oem := oemNanoKVM(sys)
+	for key, v := range map[string]string{
+		// Env-only values with no standard ComputerSystem property. The web
+		// overview reads these from here rather than /api/firmware/inventory.
+		"MACAddress":  inv["ethaddr"],
+		"SoC":         inv["soc"],
+		"DeviceTree":  inv["fdtfile"],
+		"BootMethods": inv["bootmeths"],
+	} {
+		if v != "" {
+			oem[key] = v
+		}
 	}
 
-	oemNanoKVM(sys)["InventorySource"] = "UBootEnv"
-	return true
+	oem["InventorySource"] = "UBootEnv"
 }
 
 // applySMBIOSInventory overlays the richer SMBIOS values, leaving whatever
@@ -205,10 +226,21 @@ func applySMBIOSInfo(sys *ComputerSystem, info *smbios.Info) {
 		"ProcessorPartNumber":   info.CPUPartNumber,
 		"MemoryErrorCorrection": info.MemoryErrorCorrection,
 		"SMBIOSVersion":         info.SMBIOSVersion,
+		// The boot firmware (rpi-eeprom) is a separate component from the
+		// BIOS above: BiosVersion/BIOSDate describe U-Boot (SMBIOS type 0),
+		// this is the loader that runs before it (type 45). The full
+		// per-component detail follows in FirmwareInventory.
+		"BootFirmwareVersion": info.BootFirmwareVersion,
 	} {
 		if v != "" {
 			oem[key] = v
 		}
+	}
+	// SMBIOS type 45 — every firmware image the host reports. Redfish models
+	// the running loader as a TrustedComponent + SoftwareInventory (see
+	// trusted_components.go); this is the raw inventory behind it.
+	if len(info.FirmwareInventory) > 0 {
+		oem["FirmwareInventory"] = info.FirmwareInventory
 	}
 	if info.CPUMaxSpeedMHz > 0 {
 		oem["ProcessorMaxSpeedMHz"] = info.CPUMaxSpeedMHz

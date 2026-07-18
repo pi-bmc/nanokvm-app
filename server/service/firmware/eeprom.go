@@ -92,17 +92,18 @@ type EEPROMConfigSummary struct {
 	// pieeprom.upd at next boot; missing it means the staged update is
 	// inert until the file is downloaded.
 	RecoveryBinPresent bool `json:"recoveryBinPresent"`
-	// Version is the bootloader build timestamp parsed from the image
-	// (BUILD_TIMESTAMP marker inside bootcode). Empty when no image is on
-	// the FAT — which is now the common case, since U-Boot publishes the
-	// live config over I2C instead of dumping pieeprom.bin. Prefer
-	// GitVersion/UpdatedUnix for the running bootloader's identity.
+	// Version is the bootloader build version as an ISO date "YYYY-MM-DD".
+	// It comes from the SMBIOS Type 45 firmware inventory the host
+	// publishes, falling back to the build timestamp parsed from the image
+	// (the BUILD_TIMESTAMP marker inside bootcode) when a pieeprom.bin is on
+	// the FAT. Empty when neither reported one.
 	Version string `json:"version,omitempty"`
-	// VersionUnix is the same value as a Unix timestamp; 0 when unknown.
+	// VersionUnix is the image-parsed build timestamp as a Unix time; 0 when
+	// no image was read (the SMBIOS path carries a date, not a timestamp).
 	VersionUnix int64 `json:"versionUnix,omitempty"`
 	// GitVersion is the rpi-eeprom git hash of the running bootloader, from
-	// the BootloaderVersion UEFI variable (/chosen/bootloader/version).
-	// Empty when U-Boot has not published it.
+	// the SMBIOS Type 45 firmware ID (/chosen/bootloader/version). Empty
+	// when the host has not published it.
 	GitVersion string `json:"gitVersion,omitempty"`
 	// UpdatedUnix is when the EEPROM was last flashed, from the
 	// BootloaderUpdateTimestamp UEFI variable; 0 when unknown.
@@ -140,7 +141,13 @@ func (c *Controller) GetEEPROMConfig() (EEPROMConfigSummary, error) {
 	summary.RecoveryBinPresent = recoveryPresent
 	summary.Platform = PlatformDefault
 	summary.Catalog = eepromkeys.ForPlatform(PlatformDefault)
-	summary.Version = version
+	// The host's SMBIOS Type 45 inventory describes the bootloader actually
+	// running; the image parse only describes whichever file sits on the FAT,
+	// so it is the fallback.
+	summary.Version = prov.Version
+	if summary.Version == "" {
+		summary.Version = version
+	}
 	summary.VersionUnix = versionUnix
 	summary.GitVersion = prov.GitVersion
 	summary.UpdatedUnix = prov.UpdatedUnix

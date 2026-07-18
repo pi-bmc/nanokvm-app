@@ -98,6 +98,99 @@ func TestOemNanoKVMIsCreatedOnceAndTyped(t *testing.T) {
 	}
 }
 
+// The web overview reads the Server Information card entirely off
+// /Systems/1, so every machine.env value it shows must survive the mapping —
+// including the four with no standard ComputerSystem property, which land in
+// Oem.NanoKVM. A board that never boots the SMBIOS-writing firmware has only
+// this path, so a dropped key here is a blank row in the UI.
+func TestApplyEnvInfo(t *testing.T) {
+	var sys ComputerSystem
+	applyEnvInfo(&sys, map[string]string{
+		"board_name":     "rpi5",
+		"vendor":         "Raspberry Pi",
+		"serial#":        "10000000abcdef01",
+		"board_revision": "1.1",
+		"ver":            "U-Boot 2026.04",
+		"cpu":            "armv8",
+		"soc":            "bcm2712",
+		"ethaddr":        "d8:3a:dd:00:11:22",
+		"fdtfile":        "broadcom/bcm2712-rpi-5-b.dtb",
+		"bootmeths":      "efi pxe dhcp",
+	})
+
+	for name, got := range map[string]string{
+		"Model":        sys.Model,
+		"Manufacturer": sys.Manufacturer,
+		"SerialNumber": sys.SerialNumber,
+		"SubModel":     sys.SubModel,
+		"BiosVersion":  sys.BiosVersion,
+	} {
+		if got == "" {
+			t.Errorf("%s not set from env", name)
+		}
+	}
+	// board_revision has no ComputerSystem.Version to land in; SubModel is
+	// the same slot SMBIOS type-1 Version uses.
+	if sys.SubModel != "1.1" {
+		t.Errorf("SubModel = %q, want 1.1 (board_revision)", sys.SubModel)
+	}
+	if sys.ProcessorSummary == nil || sys.ProcessorSummary.Model != "armv8" {
+		t.Errorf("ProcessorSummary = %+v, want Model armv8", sys.ProcessorSummary)
+	}
+
+	oem := oemNanoKVM(&sys)
+	for key, want := range map[string]any{
+		"MACAddress":      "d8:3a:dd:00:11:22",
+		"SoC":             "bcm2712",
+		"DeviceTree":      "broadcom/bcm2712-rpi-5-b.dtb",
+		"BootMethods":     "efi pxe dhcp",
+		"InventorySource": "UBootEnv",
+	} {
+		if oem[key] != want {
+			t.Errorf("Oem[%q] = %v, want %v", key, oem[key], want)
+		}
+	}
+}
+
+// An env that carries only some keys must not emit empty Oem entries — the
+// overview distinguishes "absent" (em-dash) from a real blank value.
+func TestApplyEnvInfoOmitsAbsentKeys(t *testing.T) {
+	var sys ComputerSystem
+	applyEnvInfo(&sys, map[string]string{"board_name": "rpi5"})
+
+	oem := oemNanoKVM(&sys)
+	for _, key := range []string{"MACAddress", "SoC", "DeviceTree", "BootMethods"} {
+		if _, present := oem[key]; present {
+			t.Errorf("Oem[%q] present for an env that does not carry it", key)
+		}
+	}
+}
+
+// SMBIOS is overlaid on top of the env and only writes non-empty values, so
+// the env-only keys the overview reads must survive the overlay.
+func TestSMBIOSOverlayKeepsEnvOnlyOemKeys(t *testing.T) {
+	var sys ComputerSystem
+	applyEnvInfo(&sys, map[string]string{
+		"board_name": "rpi5",
+		"soc":        "bcm2712",
+		"fdtfile":    "broadcom/bcm2712-rpi-5-b.dtb",
+		"bootmeths":  "efi pxe dhcp",
+		"ethaddr":    "d8:3a:dd:00:11:22",
+	})
+	applySMBIOSInfo(&sys, &smbios.Info{Manufacturer: "Raspberry Pi", Product: "Raspberry Pi 5 Model B"})
+
+	oem := oemNanoKVM(&sys)
+	for _, key := range []string{"MACAddress", "SoC", "DeviceTree", "BootMethods"} {
+		if oem[key] == nil || oem[key] == "" {
+			t.Errorf("Oem[%q] lost when SMBIOS was overlaid", key)
+		}
+	}
+	// The source label, by contrast, must report the winner.
+	if oem["InventorySource"] != "SMBIOS" {
+		t.Errorf("InventorySource = %v, want SMBIOS", oem["InventorySource"])
+	}
+}
+
 // applySMBIOSInfo must project the SMBIOS memory tables onto the standard
 // ComputerSystem.MemorySummary, and route the detail with no standard property
 // (module type/speed, ECC, sockets, per-module list, slots) to Oem.

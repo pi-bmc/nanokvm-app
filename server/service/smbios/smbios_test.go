@@ -65,6 +65,34 @@ func type0(ecMajor, ecMinor uint8, strs ...string) []byte {
 	return b.Bytes()
 }
 
+// type45 builds a Firmware Inventory Information structure (length 0x18, with
+// no associated component handles). strs are the component name, version,
+// firmware ID, release date and manufacturer.
+func type45(strs ...string) []byte {
+	var b bytes.Buffer
+	b.WriteByte(45)                    // type
+	b.WriteByte(0x18)                  // length: formatted area, no handles
+	le(&b, uint16(0x4500))             // handle
+	b.WriteByte(1)                     // component name -> string 1
+	b.WriteByte(2)                     // version        -> string 2
+	b.WriteByte(0)                     // version format: free-form
+	b.WriteByte(3)                     // firmware ID    -> string 3
+	b.WriteByte(0)                     // ID format: free-form
+	b.WriteByte(4)                     // release date   -> string 4
+	b.WriteByte(5)                     // manufacturer   -> string 5
+	b.WriteByte(0)                     // lowest supported version: none
+	le(&b, uint64(0xffffffffffffffff)) // image size: unknown
+	le(&b, uint16(1))                  // characteristics: updatable
+	b.WriteByte(4)                     // state: enabled
+	b.WriteByte(0)                     // associated component count
+	for _, s := range strs {
+		b.WriteString(s)
+		b.WriteByte(0)
+	}
+	b.WriteByte(0) // string-set terminator
+	return b.Bytes()
+}
+
 // le appends v to b in little-endian order (SMBIOS is little-endian).
 func le(b *bytes.Buffer, v any) {
 	if err := binary.Write(b, binary.LittleEndian, v); err != nil {
@@ -213,34 +241,82 @@ func sampleRegion(t *testing.T) []byte {
 	return buildRegion(t, tables)
 }
 
-func TestParseECFirmwareVersion(t *testing.T) {
-	// EC major 26 (year 2026), minor 5 (May) -> "26.05"; full date in BIOSDate.
+func TestParseFirmwareInventory(t *testing.T) {
+	// Type 0 (U-Boot's own BIOS identity) and Type 45 (the rpi-eeprom boot
+	// firmware) are independent: the eeprom version must not leak into the
+	// Type 0 fields, and vice versa.
 	region := buildRegion(t, concat(
-		type0(26, 5, "Raspberry Pi", "U-Boot 2026.04", "05/25/2026"),
+		type0(0xff, 0xff, "U-Boot", "U-Boot 2026.04", "05/20/2026"),
+		type45("Raspberry Pi Boot Firmware", "2026.525",
+			"086b83e3332dfc8927c56762771d082f3077a1ae",
+			"2026-05-25", "Raspberry Pi"),
 		endOfTable(),
 	))
 	info, err := Parse(region)
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if info.ECFirmwareVersion != "26.05" {
-		t.Errorf("ECFirmwareVersion = %q, want %q", info.ECFirmwareVersion, "26.05")
-	}
-	if info.BIOSDate != "05/25/2026" {
-		t.Errorf("BIOSDate = %q, want %q", info.BIOSDate, "05/25/2026")
-	}
 
-	// The 0xff/0xff "unknown" sentinel must read as empty, not "255.255".
-	region = buildRegion(t, concat(
-		type0(0xff, 0xff, "Raspberry Pi", "U-Boot", "01/01/2020"),
-		endOfTable(),
-	))
-	info, err = Parse(region)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
+	if len(info.FirmwareInventory) != 1 {
+		t.Fatalf("FirmwareInventory has %d entries, want 1", len(info.FirmwareInventory))
 	}
-	if info.ECFirmwareVersion != "" {
-		t.Errorf("ECFirmwareVersion = %q, want empty for the 0xff sentinel", info.ECFirmwareVersion)
+	fw := info.FirmwareInventory[0]
+	if fw.Name != "Raspberry Pi Boot Firmware" {
+		t.Errorf("Name = %q", fw.Name)
+	}
+	// "2026.525" -> the day is the right two digits of the minor segment.
+	if fw.Version != "2026-05-25" {
+		t.Errorf("Version = %q, want %q", fw.Version, "2026-05-25")
+	}
+	if fw.RawVersion != "2026.525" {
+		t.Errorf("RawVersion = %q, want %q", fw.RawVersion, "2026.525")
+	}
+	if fw.ID != "086b83e3332dfc8927c56762771d082f3077a1ae" {
+		t.Errorf("ID = %q", fw.ID)
+	}
+	if fw.ReleaseDate != "2026-05-25" {
+		t.Errorf("ReleaseDate = %q", fw.ReleaseDate)
+	}
+	if fw.Manufacturer != "Raspberry Pi" {
+		t.Errorf("Manufacturer = %q", fw.Manufacturer)
+	}
+	if info.BootFirmwareVersion != "2026-05-25" {
+		t.Errorf("BootFirmwareVersion = %q", info.BootFirmwareVersion)
+	}
+	// Type 0 still describes U-Boot, untouched by the firmware inventory.
+	if info.BIOSVersion != "U-Boot 2026.04" || info.BIOSDate != "05/20/2026" {
+		t.Errorf("Type 0 = %q/%q, want U-Boot's own identity",
+			info.BIOSVersion, info.BIOSDate)
+	}
+}
+
+func TestFirmwareVersionRendering(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		// Date-versioned: the day is the right two digits of the minor.
+		{"2026.525", "2026-05-25"},
+		{"2026.1202", "2026-12-02"},
+		// Not date-versioned: reported unchanged.
+		{"1.2.3", "1.2.3"},
+		{"086b83e3", "086b83e3"},
+		// Impossible date: left as-is rather than silently "corrected".
+		{"2026.230", "2026.230"},
+	} {
+		// Every string must be non-empty: an empty string in an SMBIOS
+		// string set reads as the set terminator and truncates the table.
+		region := buildRegion(t, concat(
+			type45("Boot Firmware", tc.raw, "id", "2026-01-01", "Raspberry Pi"),
+			endOfTable(),
+		))
+		info, err := Parse(region)
+		if err != nil {
+			t.Fatalf("Parse(%s): %v", tc.raw, err)
+		}
+		if len(info.FirmwareInventory) != 1 {
+			t.Fatalf("%s: got %d entries", tc.raw, len(info.FirmwareInventory))
+		}
+		if got := info.FirmwareInventory[0].Version; got != tc.want {
+			t.Errorf("raw %q: Version = %q, want %q", tc.raw, got, tc.want)
+		}
 	}
 }
 

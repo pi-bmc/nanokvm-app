@@ -3,19 +3,24 @@
 // store.
 //
 // U-Boot's board code (board/raspberrypi/rpi/rpi.c, rpi_publish_bootloader_vars)
-// mirrors three facts out of the VPU firmware device tree, gated on
+// mirrors facts out of the VPU firmware device tree, gated on
 // /chosen/bootloader/update-timestamp so the EEPROM is only rewritten when the
 // bootloader actually changes:
 //
-//	BootloaderVersion          the rpi-eeprom git hash (/chosen/bootloader/version)
 //	BootloaderConfig           the live EEPROM bootconf text (blconfig nvmem region)
 //	BootloaderUpdateTimestamp  the EEPROM flash time, u32 LE seconds since epoch
+//	BootloaderVersion          legacy: the rpi-eeprom git hash
 //
-// All three share one vendor GUID, defined identically here and in U-Boot.
-// Reading them over I2C lets the BMC report the running bootloader's version
-// and config without pulling the 2 MiB pieeprom.bin off the USB gadget, and
-// the timestamp tells the BMC when that image has changed so it can avoid
-// re-parsing an unchanged one.
+// BootloaderVersion is no longer published: the bootloader's version and git
+// hash now ride in the SMBIOS Type 45 firmware inventory, whose free-form
+// string fields carry them exactly (see server/service/smbios). It is still
+// read here so a board running older U-Boot keeps reporting a hash.
+//
+// All share one vendor GUID, defined identically here and in U-Boot. Reading
+// them over I2C lets the BMC report the running bootloader's config without
+// pulling the 2 MiB pieeprom.bin off the USB gadget, and the timestamp tells
+// the BMC when that image has changed so it can avoid re-parsing an unchanged
+// one.
 package bootloader
 
 import (
@@ -35,7 +40,8 @@ import (
 // string yields the same bytes on each side.
 var VendorGUID = efivars.MustParseGUID("d1a0f2c4-9b3e-4f7a-8c21-6e5b0a7d4f10")
 
-// UEFI variable names, matching the u"..." literals in U-Boot.
+// UEFI variable names, matching the u"..." literals in U-Boot. VarVersion is
+// legacy — current U-Boot reports the version via SMBIOS Type 45 instead.
 const (
 	VarVersion         = "BootloaderVersion"
 	VarConfig          = "BootloaderConfig"
@@ -53,6 +59,10 @@ type Info struct {
 	// "086b83e3332dfc8927c56762771d082f3077a1ae". This is distinct from the
 	// build-date "version" the firmware package parses out of pieeprom.bin —
 	// it exists nowhere in the image, only in the firmware device tree.
+	//
+	// Legacy: current U-Boot reports the hash as the SMBIOS type 45 firmware
+	// ID instead, so this is empty there. See firmware.BootloaderProvenance,
+	// which prefers the SMBIOS value and falls back to this one.
 	Version string
 	// Config is the live EEPROM configuration text (the bootconf.txt the
 	// running bootloader is using), copied from the blconfig nvmem region.
