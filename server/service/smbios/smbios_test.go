@@ -37,6 +37,34 @@ func type1(uuid [16]byte, strs ...string) []byte {
 	return b.Bytes()
 }
 
+// type0 builds a BIOS Information structure (length 0x18, through the Embedded
+// Controller firmware release bytes at offsets 16h/17h). strs are vendor,
+// version, release date.
+func type0(ecMajor, ecMinor uint8, strs ...string) []byte {
+	var b bytes.Buffer
+	b.WriteByte(0)         // type
+	b.WriteByte(0x18)      // length: header + formatted through EC minor
+	le(&b, uint16(0x0000)) // handle
+	b.WriteByte(1)         // vendor       -> string 1
+	b.WriteByte(2)         // bios version -> string 2
+	le(&b, uint16(0xF000)) // starting address segment
+	b.WriteByte(3)         // release date -> string 3
+	b.WriteByte(0)         // rom size
+	le(&b, uint64(0))      // bios characteristics
+	b.WriteByte(0)         // characteristics ext 1 (offset 0x12)
+	b.WriteByte(0)         // characteristics ext 2 (offset 0x13)
+	b.WriteByte(0)         // system bios major release (0x14)
+	b.WriteByte(0)         // system bios minor release (0x15)
+	b.WriteByte(ecMajor)   // EC firmware major release (0x16)
+	b.WriteByte(ecMinor)   // EC firmware minor release (0x17)
+	for _, s := range strs {
+		b.WriteString(s)
+		b.WriteByte(0)
+	}
+	b.WriteByte(0) // string-set terminator
+	return b.Bytes()
+}
+
 // le appends v to b in little-endian order (SMBIOS is little-endian).
 func le(b *bytes.Buffer, v any) {
 	if err := binary.Write(b, binary.LittleEndian, v); err != nil {
@@ -183,6 +211,37 @@ func sampleRegion(t *testing.T) []byte {
 		endOfTable(),
 	)
 	return buildRegion(t, tables)
+}
+
+func TestParseECFirmwareVersion(t *testing.T) {
+	// EC major 26 (year 2026), minor 5 (May) -> "26.05"; full date in BIOSDate.
+	region := buildRegion(t, concat(
+		type0(26, 5, "Raspberry Pi", "U-Boot 2026.04", "05/25/2026"),
+		endOfTable(),
+	))
+	info, err := Parse(region)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if info.ECFirmwareVersion != "26.05" {
+		t.Errorf("ECFirmwareVersion = %q, want %q", info.ECFirmwareVersion, "26.05")
+	}
+	if info.BIOSDate != "05/25/2026" {
+		t.Errorf("BIOSDate = %q, want %q", info.BIOSDate, "05/25/2026")
+	}
+
+	// The 0xff/0xff "unknown" sentinel must read as empty, not "255.255".
+	region = buildRegion(t, concat(
+		type0(0xff, 0xff, "Raspberry Pi", "U-Boot", "01/01/2020"),
+		endOfTable(),
+	))
+	info, err = Parse(region)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if info.ECFirmwareVersion != "" {
+		t.Errorf("ECFirmwareVersion = %q, want empty for the 0xff sentinel", info.ECFirmwareVersion)
+	}
 }
 
 func TestParseSystemInformation(t *testing.T) {

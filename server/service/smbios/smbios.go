@@ -94,6 +94,11 @@ type Info struct {
 	BIOSVendor  string `json:"biosVendor,omitempty"`
 	BIOSVersion string `json:"biosVersion,omitempty"`
 	BIOSDate    string `json:"biosDate,omitempty"`
+	// ECFirmwareVersion is the Type 0 Embedded Controller firmware release
+	// (offsets 16h/17h) as "major.minor". On this platform U-Boot encodes the
+	// rpi-eeprom boot firmware release there as year.month; the full flash date
+	// is in BIOSDate. Empty when the fields report the 0xff "unknown" sentinel.
+	ECFirmwareVersion string `json:"ecFirmwareVersion,omitempty"`
 
 	// Type 2 - Baseboard Information.
 	BoardManufacturer string `json:"boardManufacturer,omitempty"`
@@ -263,6 +268,8 @@ func infoFrom(s *gosmbios.SMBIOS, v gosmbios.Version) *Info {
 		BIOSVersion: s.BIOSInformation.Version,
 		BIOSDate:    s.BIOSInformation.ReleaseDate,
 
+		ECFirmwareVersion: ecFirmwareVersion(s),
+
 		BoardManufacturer: s.BaseboardInformation.Manufacturer,
 		BoardProduct:      s.BaseboardInformation.Product,
 		BoardSerial:       s.BaseboardInformation.SerialNumber,
@@ -325,6 +332,30 @@ func infoFrom(s *gosmbios.SMBIOS, v gosmbios.Version) *Info {
 	}
 
 	return info
+}
+
+// ecFirmwareVersion extracts the Type 0 Embedded Controller firmware release
+// (SMBIOS offsets 16h/17h) as "major.minor". go-smbios does not surface these
+// bytes, so read them from the raw structure's Formatted area (which begins at
+// offset 0x04, so 16h/17h are Formatted[0x12]/[0x13]). Returns "" when Type 0
+// is absent, too short to include the fields, or reports the 0xff/0xff
+// "unknown" sentinel.
+func ecFirmwareVersion(s *gosmbios.SMBIOS) string {
+	const ecMajorIdx, ecMinorIdx = 0x16 - 0x04, 0x17 - 0x04
+	for _, st := range s.Structures {
+		if st == nil || st.Header.Type != 0 { // Type 0 - BIOS Information
+			continue
+		}
+		if len(st.Formatted) <= ecMinorIdx {
+			return ""
+		}
+		major, minor := st.Formatted[ecMajorIdx], st.Formatted[ecMinorIdx]
+		if major == 0xff && minor == 0xff {
+			return ""
+		}
+		return fmt.Sprintf("%d.%02d", major, minor)
+	}
+	return ""
 }
 
 // memoryDeviceMB returns a memory device's installed size in megabytes, or 0
