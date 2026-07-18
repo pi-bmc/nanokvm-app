@@ -63,6 +63,9 @@ func SetAccount(username string, hashedPassword string) error {
 		return err
 	}
 
+	// Drop any memoized Basic-Auth credentials so the new password takes effect
+	// immediately instead of after the cache TTL.
+	invalidateBasicAuthCache()
 	return nil
 }
 
@@ -100,6 +103,14 @@ func CompareAccount(username string, plainPassword string) bool {
 // HTTP Basic) where the client sends the password in plain text rather
 // than the obfuscated form the web UI uses.
 func ComparePlainAccount(username string, plainPassword string) bool {
+	// Fast path: a recent successful check of this exact credential skips the
+	// deliberately expensive bcrypt comparison. Only positives are cached and
+	// the cache is flushed on any password change, so this never weakens
+	// brute-force resistance (see basicauth_cache.go).
+	if basicAuthCache.get(username, plainPassword) {
+		return true
+	}
+
 	account, err := GetAccount()
 	if err != nil {
 		return false
@@ -108,11 +119,13 @@ func ComparePlainAccount(username string, plainPassword string) bool {
 		return false
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(plainPassword)); err == nil {
+		basicAuthCache.put(username, plainPassword)
 		return true
 	}
 	// Legacy: older installs stored the password as an encrypted blob
 	// rather than a bcrypt hash. Decrypt and compare directly.
 	if stored, err := utils.DecodeDecrypt(account.Password); err == nil && stored == plainPassword {
+		basicAuthCache.put(username, plainPassword)
 		return true
 	}
 	return false
@@ -124,6 +137,8 @@ func DelAccount() error {
 		return err
 	}
 
+	// The credential just changed (reset to default); drop memoized entries.
+	invalidateBasicAuthCache()
 	return nil
 }
 
