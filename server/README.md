@@ -37,8 +37,8 @@ cert:
 
 # Logging Configuration
 logger:
-    level: info     # Global log output level. Evaluated options from highest to lowest detail: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic`. Default is `info`
-    file: stdout    # Log output destination. `stdout` outputs to the standard console. A file path directs log output to that file. Default is `stdout`
+    level: info                          # Global log output level. Evaluated options from highest to lowest detail: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic`. Default is `info`
+    file: /var/log/NanoKVM-Server.log    # Log output destination. A file path directs log output to that file, which is rotated automatically (10 MB per file, 3 compressed backups, 28-day retention). `console` outputs to stdout instead. Default is `/var/log/NanoKVM-Server.log`
 
 
 # Authentication & Security

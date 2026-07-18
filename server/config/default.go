@@ -14,7 +14,9 @@ var defaultConfig = &Config{
 	},
 	Logger: Logger{
 		Level: "info",
-		File:  "stdout",
+		// Log to a rotating file on the persistent rootfs (see server/logger).
+		// Set File to "console" to log to stdout instead.
+		File: "/var/log/NanoKVM-Server.log",
 	},
 	JWT: JWT{
 		SecretKey:            "",
@@ -144,6 +146,14 @@ func checkDefaultValue() {
 
 	if instance.Authentication == "" {
 		instance.Authentication = "enable"
+	}
+
+	// File logging is the default. Older builds persisted the previous "stdout"
+	// default into server.yaml automatically, so treat that (and an unset value)
+	// as "use the default" and adopt the rotating file log on upgrade. Set
+	// logger.file to "console" to keep logging to stdout.
+	if instance.Logger.File == "" || instance.Logger.File == "stdout" {
+		instance.Logger.File = defaultConfig.Logger.File
 	}
 
 	// Apply serial defaults when not present in the config file.

@@ -94,6 +94,14 @@ func run() {
 	conf := config.GetInstance()
 
 	gin.SetMode(gin.ReleaseMode)
+
+	// Route gin's request/error logs through the same destination as the rest
+	// of the app (the rotating log file when file logging is configured) so
+	// nothing writes to a separate, unrotated stream.
+	gin.DefaultWriter = logger.Writer()
+	gin.DefaultErrorWriter = logger.Writer()
+	gin.DisableConsoleColor()
+
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
@@ -140,4 +148,8 @@ func dispose() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	telemetry.Shutdown(shutdownCtx)
+
+	// Flush and release the rotating log file last, after other subsystems have
+	// logged their shutdown.
+	_ = logger.Close()
 }

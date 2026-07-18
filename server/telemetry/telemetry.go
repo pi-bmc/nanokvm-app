@@ -76,6 +76,21 @@ func Init(ctx context.Context) error {
 		readers := []sdkmetric.Reader{}
 
 		if cfg.Prometheus.Enabled {
+			// client_golang's default registry auto-registers a process
+			// collector with ReportErrors:false, so on some platforms a
+			// failing /proc read makes it silently emit nothing — no
+			// process_open_fds / _max_fds / _resident_memory_bytes. Swap it
+			// for one that surfaces errors, so FD/RSS are observable (and any
+			// read failure shows up as a scrape error instead of a blank).
+			PromRegistry.Unregister(
+				prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+			)
+			if err := PromRegistry.Register(prometheus.NewProcessCollector(
+				prometheus.ProcessCollectorOpts{ReportErrors: true},
+			)); err != nil {
+				log.Warnf("telemetry: process collector: %v", err)
+			}
+
 			// Bridges OTel metric instruments → the Prometheus registry,
 			// so /metrics shows them alongside any native prom collectors.
 			promExporter, err := otelprom.New(
