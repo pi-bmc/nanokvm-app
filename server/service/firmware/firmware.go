@@ -128,12 +128,9 @@ func (c *Controller) Init() error {
 		}
 	}
 
-	// Create lun.1 (virtual CD-ROM) now, before the UDC is bound, so the
-	// kernel accepts the topology change without needing an unbind/rebind.
-	if err := c.ensureLUN1(); err != nil {
-		log.Warnf("firmware: lun.1 setup failed (virtual media unavailable): %v", err)
-	}
-
+	// The gadget itself (g0, all functions incl. lun.1) is built by the
+	// usbgadget package at server startup, before this runs. Here we only fill
+	// lun.0's backing file with the boot image.
 	log.Info("firmware: image found, presenting via USB gadget")
 	if err := c.presentImage(); err != nil {
 		log.Warnf("firmware: USB gadget present failed (may not be available in this environment): %v", err)

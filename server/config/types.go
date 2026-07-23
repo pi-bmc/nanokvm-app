@@ -3,22 +3,23 @@ package config
 import "fmt"
 
 type Config struct {
-	Proto          string   `yaml:"proto"`
-	Port           Port     `yaml:"port"`
-	Cert           Cert     `yaml:"cert"`
-	Logger         Logger   `yaml:"logger"`
-	Authentication string   `yaml:"authentication"`
-	JWT            JWT      `yaml:"jwt"`
-	Stun           string   `yaml:"stun"`
-	Turn           Turn     `yaml:"turn"`
-	Security       Security `yaml:"security"`
-	IPMI           IPMI     `yaml:"ipmi"`
-	Redfish        Redfish  `yaml:"redfish"`
-	Serial         Serial   `yaml:"serial"`
-	Firmware       Firmware `yaml:"firmware"`
-	EfiVars        EfiVars  `yaml:"efiVars"`
-	UbootEnv       UbootEnv `yaml:"ubootEnv"`
-	SMBIOS         SMBIOS   `yaml:"smbios"`
+	Proto          string    `yaml:"proto"`
+	Port           Port      `yaml:"port"`
+	Cert           Cert      `yaml:"cert"`
+	Logger         Logger    `yaml:"logger"`
+	Authentication string    `yaml:"authentication"`
+	JWT            JWT       `yaml:"jwt"`
+	Stun           string    `yaml:"stun"`
+	Turn           Turn      `yaml:"turn"`
+	Security       Security  `yaml:"security"`
+	IPMI           IPMI      `yaml:"ipmi"`
+	Redfish        Redfish   `yaml:"redfish"`
+	Serial         Serial    `yaml:"serial"`
+	Firmware       Firmware  `yaml:"firmware"`
+	UsbGadget      UsbGadget `yaml:"usbGadget"`
+	EfiVars        EfiVars   `yaml:"efiVars"`
+	UbootEnv       UbootEnv  `yaml:"ubootEnv"`
+	SMBIOS         SMBIOS    `yaml:"smbios"`
 
 	Power      Power      `yaml:"power"`
 	Telemetry  Telemetry  `yaml:"telemetry"`
@@ -175,6 +176,61 @@ type Firmware struct {
 	OnceEnv       string `yaml:"onceEnv"`
 	// MediaDir is the directory where ISO images for virtual media are stored.
 	MediaDir string `yaml:"mediaDir"`
+}
+
+// UsbGadget configures the USB device gadget (g0) that the BMC presents to the
+// managed host. The Go server is the sole owner of the gadget's configfs tree
+// (/sys/kernel/config/usb_gadget/g0): it builds the gadget at startup and
+// mutates it at runtime. This replaced the packaging/etc/init.d/S03usbdev shell
+// script and the ad-hoc /boot flag files that used to drive it; see the
+// server/service/usbgadget package.
+type UsbGadget struct {
+	// Enabled gates the whole subsystem. When false the server does not touch
+	// the gadget configfs at all (e.g. boards without a device-mode UDC).
+	Enabled bool `yaml:"enabled"`
+
+	// USB device-descriptor identity. VendorID/ProductID are hex strings
+	// ("0x3346"/"0x1009") written verbatim to idVendor/idProduct.
+	VendorID     string `yaml:"vendorID"`
+	ProductID    string `yaml:"productID"`
+	SerialNumber string `yaml:"serialNumber"`
+	Manufacturer string `yaml:"manufacturer"`
+	Product      string `yaml:"product"`
+
+	// Configuration descriptor attributes for configs/c.1. BmAttributes is a
+	// hex string ("0xE0" = bus-powered + remote wakeup); MaxPower is in mA/2
+	// units as configfs expects (120).
+	MaxPower     int    `yaml:"maxPower"`
+	BmAttributes string `yaml:"bmAttributes"`
+
+	// HID enables the keyboard/mouse/touchpad functions (hid.GS0/1/2). The HID
+	// report streams are consumed by a separate component; the gadget only has
+	// to create the functions with the correct report descriptors.
+	HID bool `yaml:"hid"`
+	// BIOSMode sets subclass=1 on the HID functions (boot-protocol compatible
+	// for BIOS/UEFI setup screens). Formerly the /boot/BIOS flag.
+	BIOSMode bool `yaml:"biosMode"`
+	// WakeupOnWrite sets wakeup_on_write=1 on the HID functions so host writes
+	// can wake a suspended host. Formerly the absence of /boot/usb.notwakeup.
+	WakeupOnWrite bool `yaml:"wakeupOnWrite"`
+
+	// BindUDC binds the gadget to a UDC at startup. Formerly the absence of
+	// /boot/udc.disable.
+	BindUDC bool `yaml:"bindUDC"`
+	// UDCName selects the UDC to bind. Empty = auto-detect the first entry in
+	// /sys/class/udc (this board's dwc2 controller is "4340000.usb").
+	UDCName string `yaml:"udcName"`
+	// OTGRolePath is the CVITEK/Sophgo OTG role switch. The gadget writes
+	// "device" here after binding so the controller acts as a peripheral.
+	OTGRolePath string `yaml:"otgRolePath"`
+	// PHYDevice is the platform device name rebound on RebindPHY() recovery
+	// (dwc2 driver unbind/bind).
+	PHYDevice string `yaml:"phyDevice"`
+
+	// StatePath persists the runtime function toggles (ethernet mode, disk)
+	// across reboots on the /data partition. Its absence is also the first-run
+	// sentinel that triggers the one-time migration from the legacy /boot flags.
+	StatePath string `yaml:"statePath"`
 }
 
 // EfiVars configures access to the UEFI variable store that U-Boot on the

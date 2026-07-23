@@ -1,62 +1,34 @@
 package vm
 
 import (
-	"errors"
-	"os"
-	"os/exec"
-
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pi-bmc/nanokvm-app/server/proto"
+	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
+	"github.com/pi-bmc/nanokvm-app/server/service/usbgadget"
 )
 
-const (
-	virtualNetwork = "/boot/usb.ecm0"
-	virtualDisk    = "/boot/usb.disk0"
-)
-
-var (
-	mountNetworkCommands = []string{
-		"touch /boot/usb.ecm0",
-		"/etc/init.d/S03usbdev stop",
-		"/etc/init.d/S03usbdev start",
-	}
-
-	unmountNetworkCommands = []string{
-		"/etc/init.d/S03usbdev stop",
-		"rm -rf /sys/kernel/config/usb_gadget/g0/configs/c.1/ecm.usb0",
-		"rm /boot/usb.ecm0",
-		"/etc/init.d/S03usbdev start",
-	}
-
-	mountDiskCommands = []string{
-		"touch /boot/usb.disk0",
-		"/etc/init.d/S03usbdev stop",
-		"/etc/init.d/S03usbdev start",
-	}
-
-	unmountDiskCommands = []string{
-		"/etc/init.d/S03usbdev stop",
-		"rm -rf /sys/kernel/config/usb_gadget/g0/configs/c.1/mass_storage.disk0",
-		"rm /boot/usb.disk0",
-		"/etc/init.d/S03usbdev start",
-	}
-)
-
+// GetVirtualDevice reports which optional USB gadget functions are currently
+// exposed to the host: the ethernet function (network), the mass-storage disk,
+// and whether virtual media (an ISO on lun.1) is inserted.
 func (s *Service) GetVirtualDevice(c *gin.Context) {
 	var rsp proto.Response
 
-	network, _ := isDeviceExist(virtualNetwork)
-	disk, _ := isDeviceExist(virtualDisk)
+	st := usbgadget.Get().State()
+	media := firmware.GetController().GetVirtualMediaState().Inserted
 
 	rsp.OkRspWithData(c, &proto.GetVirtualDeviceRsp{
-		Network: network,
-		Disk:    disk,
+		Network: st.Ethernet != usbgadget.EthernetOff,
+		Media:   media,
+		Disk:    st.Disk,
 	})
 	log.Debugf("get virtual device success")
 }
 
+// UpdateVirtualDevice toggles the ethernet or disk gadget function. The gadget
+// package reconciles the configfs topology and re-enumerates the host; the
+// choice is persisted so it survives a reboot.
 func (s *Service) UpdateVirtualDevice(c *gin.Context) {
 	var req proto.UpdateVirtualDeviceReq
 	var rsp proto.Response
@@ -66,60 +38,38 @@ func (s *Service) UpdateVirtualDevice(c *gin.Context) {
 		return
 	}
 
-	var device string
-	var commands []string
+	gadget := usbgadget.Get()
+	st := gadget.State()
 
+	var on bool
 	switch req.Device {
 	case "network":
-		device = virtualNetwork
-
-		exist, _ := isDeviceExist(device)
-		if !exist {
-			commands = mountNetworkCommands
-		} else {
-			commands = unmountNetworkCommands
+		// Toggle the ethernet function on/off. Enabling defaults to CDC-ECM.
+		on = st.Ethernet == usbgadget.EthernetOff
+		mode := usbgadget.EthernetOff
+		if on {
+			mode = usbgadget.EthernetECM
+		}
+		if err := gadget.SetEthernet(mode); err != nil {
+			log.Errorf("set ethernet %s failed: %s", mode, err)
+			rsp.ErrRsp(c, -3, "operation failed")
+			return
 		}
 	case "disk":
-		device = virtualDisk
-
-		exist, _ := isDeviceExist(device)
-		if !exist {
-			commands = mountDiskCommands
-		} else {
-			commands = unmountDiskCommands
+		on = !st.Disk
+		if err := gadget.SetDisk(on); err != nil {
+			log.Errorf("set disk %v failed: %s", on, err)
+			rsp.ErrRsp(c, -3, "operation failed")
+			return
 		}
 	default:
 		rsp.ErrRsp(c, -2, "invalid arguments")
 		return
 	}
 
-	for _, command := range commands {
-		err := exec.Command("sh", "-c", command).Run()
-		if err != nil {
-			rsp.ErrRsp(c, -3, "operation failed")
-			return
-		}
-	}
-
-	on, _ := isDeviceExist(device)
 	rsp.OkRspWithData(c, &proto.UpdateVirtualDeviceRsp{
 		On: on,
 	})
 
 	log.Debugf("update virtual device %s success", req.Device)
-}
-
-func isDeviceExist(device string) (bool, error) {
-	_, err := os.Stat(device)
-
-	if err == nil {
-		return true, nil
-	}
-
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-
-	log.Errorf("check file %s err: %s", device, err)
-	return false, err
 }

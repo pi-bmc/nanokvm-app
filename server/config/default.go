@@ -59,6 +59,24 @@ var defaultConfig = &Config{
 		OnceEnv:       "/data/firmware/files/once.env",
 		MediaDir:      "/data/media",
 	},
+	UsbGadget: UsbGadget{
+		Enabled:       true,
+		VendorID:      "0x3346",
+		ProductID:     "0x1009",
+		SerialNumber:  "0123456789ABCDEF",
+		Manufacturer:  "sipeed",
+		Product:       "NanoKVM",
+		MaxPower:      120,
+		BmAttributes:  "0xE0",
+		HID:           true,
+		BIOSMode:      false,
+		WakeupOnWrite: true,
+		BindUDC:       true,
+		UDCName:       "", // auto-detect (this board: 4340000.usb)
+		OTGRolePath:   "/proc/cviusb/otg_role",
+		PHYDevice:     "4340000.usb",
+		StatePath:     "/data/usbgadget/state.json",
+	},
 	EfiVars: EfiVars{
 		Enabled: true,
 		// Read the store from the BMC's own i2c-slave-eeprom backing file. The
@@ -200,6 +218,42 @@ func checkDefaultValue() {
 	}
 	if instance.Firmware.MediaDir == "" {
 		instance.Firmware.MediaDir = defaultConfig.Firmware.MediaDir
+	}
+
+	// Apply USB gadget identity/path defaults when not present in the config
+	// file. The boolean toggles (Enabled/HID/WakeupOnWrite/BindUDC) are seeded
+	// authoritatively by the usbgadget package's one-time migration on first
+	// run, not here, because a default-true bool is indistinguishable from an
+	// explicit false at the zero value.
+	if instance.UsbGadget.VendorID == "" {
+		instance.UsbGadget.VendorID = defaultConfig.UsbGadget.VendorID
+	}
+	if instance.UsbGadget.ProductID == "" {
+		instance.UsbGadget.ProductID = defaultConfig.UsbGadget.ProductID
+	}
+	if instance.UsbGadget.SerialNumber == "" {
+		instance.UsbGadget.SerialNumber = defaultConfig.UsbGadget.SerialNumber
+	}
+	if instance.UsbGadget.Manufacturer == "" {
+		instance.UsbGadget.Manufacturer = defaultConfig.UsbGadget.Manufacturer
+	}
+	if instance.UsbGadget.Product == "" {
+		instance.UsbGadget.Product = defaultConfig.UsbGadget.Product
+	}
+	if instance.UsbGadget.BmAttributes == "" {
+		instance.UsbGadget.BmAttributes = defaultConfig.UsbGadget.BmAttributes
+	}
+	if instance.UsbGadget.MaxPower <= 0 {
+		instance.UsbGadget.MaxPower = defaultConfig.UsbGadget.MaxPower
+	}
+	if instance.UsbGadget.OTGRolePath == "" {
+		instance.UsbGadget.OTGRolePath = defaultConfig.UsbGadget.OTGRolePath
+	}
+	if instance.UsbGadget.PHYDevice == "" {
+		instance.UsbGadget.PHYDevice = defaultConfig.UsbGadget.PHYDevice
+	}
+	if instance.UsbGadget.StatePath == "" {
+		instance.UsbGadget.StatePath = defaultConfig.UsbGadget.StatePath
 	}
 
 	normalizeEEPROMRegions()

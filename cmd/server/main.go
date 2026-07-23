@@ -18,6 +18,7 @@ import (
 	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 	"github.com/pi-bmc/nanokvm-app/server/service/ipmi"
+	"github.com/pi-bmc/nanokvm-app/server/service/usbgadget"
 	"github.com/pi-bmc/nanokvm-app/server/telemetry"
 	"github.com/pi-bmc/nanokvm-app/server/utils"
 
@@ -65,6 +66,14 @@ func initialize() {
 		log.Printf("IPMI server failed to start: %v", err)
 	} else {
 		ipmiServer = srv
+	}
+
+	// Build the USB gadget (g0 + all functions + UDC bind) before presenting the
+	// firmware image. usbgadget is the sole owner of the gadget configfs — this
+	// replaces the old S03usbdev init script — so the host-visible topology and
+	// a bound UDC come up independent of firmware image availability.
+	if err := usbgadget.Get().Init(); err != nil {
+		log.Printf("USB gadget init: %v", err)
 	}
 
 	// Initialize firmware controller (mount image if available).

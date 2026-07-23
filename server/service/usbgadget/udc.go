@@ -1,0 +1,140 @@
+package usbgadget
+
+import (
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+)
+
+const udcClassPath = "/sys/class/udc"
+
+// dwc2 platform driver paths for PHY recovery (S03usbdev restart_phy parity).
+const (
+	dwc2UnbindPath = "/sys/bus/platform/drivers/dwc2/unbind"
+	dwc2BindPath   = "/sys/bus/platform/drivers/dwc2/bind"
+)
+
+// udcName returns the UDC to bind: cfg.UDCName if set, else the first entry in
+// /sys/class/udc (this board's dwc2 controller is "4340000.usb").
+func (g *Gadget) udcName() (string, error) {
+	if g.cfg.UDCName != "" {
+		return g.cfg.UDCName, nil
+	}
+	entries, err := os.ReadDir(udcClassPath)
+	if err != nil {
+		return "", fmt.Errorf("list %s: %w", udcClassPath, err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if len(names) == 0 {
+		return "", fmt.Errorf("no UDC found in %s", udcClassPath)
+	}
+	sort.Strings(names)
+	return names[0], nil
+}
+
+// UDCBound reports whether a UDC is currently bound to the gadget.
+func (g *Gadget) UDCBound() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.udcBound()
+}
+
+func (g *Gadget) udcBound() bool {
+	data, err := os.ReadFile(g.udcPath())
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(data)) != ""
+}
+
+// bindUDCLocked writes the UDC name into g0/UDC. Caller holds g.mu.
+func (g *Gadget) bindUDCLocked() error {
+	udc, err := g.udcName()
+	if err != nil {
+		return err
+	}
+	if err := writeAttr(g.udcPath(), udc); err != nil {
+		return fmt.Errorf("bind UDC %s: %w", udc, err)
+	}
+	return nil
+}
+
+// unbindUDCLocked clears g0/UDC and waits until the kernel confirms release.
+// Writing "" is asynchronous on this kernel, so poll (20 × 50 ms) until the UDC
+// file reads back empty before any topology mutation. Caller holds g.mu.
+func (g *Gadget) unbindUDCLocked() error {
+	if !g.udcBound() {
+		return nil
+	}
+	if err := writeAttr(g.udcPath(), "\n"); err != nil {
+		return fmt.Errorf("clear UDC: %w", err)
+	}
+	for i := 0; i < 20; i++ {
+		time.Sleep(50 * time.Millisecond)
+		if !g.udcBound() {
+			return nil
+		}
+	}
+	return fmt.Errorf("timed out waiting for UDC to unbind")
+}
+
+// RebindUDC unbinds and rebinds the UDC to force the host to re-enumerate.
+// Replaces the old firmware.resetUDC.
+func (g *Gadget) RebindUDC() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.rebindUDCLocked()
+}
+
+func (g *Gadget) rebindUDCLocked() error {
+	if err := g.unbindUDCLocked(); err != nil {
+		log.Warnf("usbgadget: unbind during rebind: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	return g.bindUDCLocked()
+}
+
+// SetOTGRole sets the CVITEK/Sophgo OTG role ("device"|"host").
+func (g *Gadget) SetOTGRole(role string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.setOTGRoleLocked(role)
+}
+
+func (g *Gadget) setOTGRoleLocked(role string) error {
+	if g.cfg.OTGRolePath == "" {
+		return nil
+	}
+	if err := writeAttr(g.cfg.OTGRolePath, role); err != nil {
+		return fmt.Errorf("set otg role %s: %w", role, err)
+	}
+	return nil
+}
+
+// RebindPHY rebinds the dwc2 platform driver to recover a wedged controller.
+// Mirrors the old S03usbdev restart_phy action.
+func (g *Gadget) RebindPHY() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	dev := g.cfg.PHYDevice
+	if dev == "" {
+		return fmt.Errorf("phy device not configured")
+	}
+	if err := writeAttr(dwc2UnbindPath, dev); err != nil {
+		return fmt.Errorf("dwc2 unbind %s: %w", dev, err)
+	}
+	time.Sleep(1 * time.Second)
+	if err := writeAttr(dwc2BindPath, dev); err != nil {
+		return fmt.Errorf("dwc2 bind %s: %w", dev, err)
+	}
+	log.Infof("usbgadget: rebound dwc2 PHY %s", dev)
+	return nil
+}

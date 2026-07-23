@@ -23,6 +23,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/pi-bmc/nanokvm-app/server/service/usbgadget"
 )
 
 // Hybrid image conversion constants.
@@ -89,15 +91,12 @@ func (c *Controller) GetVirtualMediaState() VirtualMediaState {
 	return c.vmState
 }
 
-// recoverVMStateFromGadget inspects gadgetLUN1File and, if it points at a
-// readable file, returns a populated VirtualMediaState. Caller must hold c.mu.
+// recoverVMStateFromGadget inspects the gadget's lun.1 backing file and, if it
+// points at a readable file, returns a populated VirtualMediaState. Caller must
+// hold c.mu.
 func (c *Controller) recoverVMStateFromGadget() (VirtualMediaState, bool) {
-	data, err := os.ReadFile(gadgetLUN1File)
-	if err != nil {
-		return VirtualMediaState{}, false
-	}
-	path := strings.TrimSpace(string(data))
-	if path == "" {
+	path, ok := usbgadget.Get().LUN1File()
+	if !ok {
 		return VirtualMediaState{}, false
 	}
 	info, err := os.Stat(path)
@@ -237,7 +236,7 @@ func (c *Controller) InsertVirtualMedia(name string) error {
 		return fmt.Errorf("media file %q not found: %w", name, err)
 	}
 
-	if err := c.presentISO(srcPath); err != nil {
+	if err := usbgadget.Get().InsertMedia(srcPath); err != nil {
 		return fmt.Errorf("insert virtual media: %w", err)
 	}
 
@@ -257,7 +256,7 @@ func (c *Controller) EjectVirtualMedia() error {
 
 	prevName := c.vmState.ImageName
 
-	if err := c.unpresentISO(); err != nil {
+	if err := usbgadget.Get().EjectMedia(); err != nil {
 		return fmt.Errorf("eject virtual media: %w", err)
 	}
 
