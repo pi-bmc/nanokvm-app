@@ -64,16 +64,16 @@ templ EEPROMDialog() {
 					@icon.HardDrive()
 				</div>
 				<div class="space-y-2 max-w-sm">
-					<p class="font-medium">No EEPROM image found</p>
+					<p class="font-medium">No bootloader config reported yet</p>
 					<p class="text-sm text-muted-foreground">
-						<code class="rounded bg-muted px-1 text-foreground">pieeprom.bin</code> is not yet on the firmware FAT — U-Boot writes it on each host boot. To configure the bootloader now, initialize with the latest stable upstream image.
+						The host has not published its live bootloader config over I2C, and nothing is staged. To configure the bootloader now, initialize with the latest stable upstream image.
 					</p>
 					<p class="text-xs text-muted-foreground">
 						The downloaded image will be staged as <code class="rounded bg-muted px-1 text-foreground">pieeprom.upd</code>. You can edit settings before the next boot flashes it.
 					</p>
 				</div>
 				@separator.Separator()
-				<p class="text-xs text-muted-foreground">Alternatively, reboot the host so U-Boot writes a fresh <code class="rounded bg-muted px-1 text-foreground">pieeprom.bin</code> dump, then reload.</p>
+				<p class="text-xs text-muted-foreground">Alternatively, boot the host once so U-Boot publishes its live config over I2C, then reload.</p>
 			</div>
 			<div id="eeprom-editor-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 py-2 min-h-0">
 				<div class="space-y-1.5">
@@ -329,7 +329,9 @@ templ eepromDialogScript() {
 
 			function describeState(data) {
 				const parts = [];
-				if (data.source === 'pieeprom.bin') {
+				if (data.source === 'BootloaderConfig') {
+					parts.push('Loaded the live config U-Boot published over I2C');
+				} else if (data.source === 'pieeprom.bin') {
 					parts.push("Loaded live config from U-Boot's pieeprom.bin dump");
 				} else if (data.source === 'pieeprom.upd') {
 					parts.push('Showing the staged pieeprom.upd update');
@@ -342,8 +344,10 @@ templ eepromDialogScript() {
 				if (data.pending) {
 					parts.push('a pending update is staged for the next boot');
 				}
-				if (!data.pieepromBinPresent) {
-					parts.push('pieeprom.bin not yet on the FAT — reboot the host so U-Boot writes one');
+				// A staged image built from a downloaded base also moves the
+				// bootloader version, not just its config — say so explicitly.
+				if (data.pendingVersion && data.pendingVersion !== data.version) {
+					parts.push(`the staged update also moves the bootloader to ${data.pendingVersion}`);
 				}
 				if (data.pending && !data.recoveryBinPresent) {
 					parts.push('recovery.bin missing — the staged update will not flash until it is downloaded');
@@ -361,11 +365,14 @@ templ eepromDialogScript() {
 						return;
 					}
 					const data = await r.json();
-					// First-time setup: no image on the FAT yet. Show the init
-					// prompt and let the operator opt in to downloading one.
-					if (!data.pieepromBinPresent && !data.pending) {
+					// First-time setup only when the host has reported no config
+					// at all. A missing pieeprom.bin is NORMAL — U-Boot publishes
+					// the live bootconf over I2C instead of dumping the image, and
+					// saving downloads a base image on demand — so it must not
+					// gate the editor.
+					if (!data.raw && !data.pending) {
 						showInitView();
-						setStatus('No EEPROM image on the firmware FAT.');
+						setStatus('No bootloader config reported yet.');
 						return;
 					}
 					showEditorView();
@@ -494,10 +501,11 @@ templ eepromDialogScript() {
 				btn.disabled = true;
 				setStatus('Staging update…');
 				try {
-					// The server mutates the live pieeprom.bin U-Boot wrote on
-					// the last host boot. If pieeprom.bin isn't on the FAT
-					// yet the server returns an error — reboot the host so
-					// U-Boot writes one.
+					// The server injects this config into a base image: the
+					// staged pieeprom.upd, else a pieeprom.bin on the FAT, else
+					// the latest upstream image downloaded on demand. No local
+					// image is required, so this works on a normal boot where
+					// U-Boot publishes the config over I2C without dumping one.
 					const r = await fetch('/api/firmware/eeprom', {
 						method: 'PUT',
 						headers: getAuthHeaders(),

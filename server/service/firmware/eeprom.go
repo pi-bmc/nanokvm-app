@@ -83,21 +83,28 @@ type EEPROMConfigSummary struct {
 	// staged update is being previewed).
 	Source string `json:"source"`
 	// PieepromBinPresent reports whether the FAT holds a pieeprom.bin.
-	// Under the current U-Boot it should always be true; the flag is
-	// kept so the UI can surface a clear "no image yet — reboot" hint
-	// while the BMC starts up before U-Boot has written one.
+	// Normally false: U-Boot publishes the live bootconf over I2C instead of
+	// dumping the image. Staging a change therefore downloads a base image
+	// (see ensureEEPROMSourceImage) rather than requiring one here, so this
+	// is informational only — the UI must not gate editing on it.
 	PieepromBinPresent bool `json:"pieepromBinPresent"`
 	// RecoveryBinPresent reports whether recovery.bin is staged on the
 	// FAT. rpi-eeprom-update needs it to actually apply a pending
 	// pieeprom.upd at next boot; missing it means the staged update is
 	// inert until the file is downloaded.
 	RecoveryBinPresent bool `json:"recoveryBinPresent"`
-	// Version is the bootloader build version as an ISO date "YYYY-MM-DD".
-	// It comes from the SMBIOS Type 45 firmware inventory the host
-	// publishes, falling back to the build timestamp parsed from the image
-	// (the BUILD_TIMESTAMP marker inside bootcode) when a pieeprom.bin is on
-	// the FAT. Empty when neither reported one.
+	// Version is the *running* bootloader's build version as an ISO date
+	// "YYYY-MM-DD", from the SMBIOS Type 45 firmware inventory the host
+	// publishes. Falls back to the build timestamp parsed from a live
+	// pieeprom.bin (the BUILD_TIMESTAMP marker inside bootcode) when SMBIOS
+	// reported nothing. Empty when neither did.
 	Version string `json:"version,omitempty"`
+	// PendingVersion is the build version of the staged pieeprom.upd, as an
+	// ISO date. Set only when Pending is true, and only when it could be
+	// parsed. It is what the host will be running after the next boot — so
+	// a value differing from Version means this staged update also moves the
+	// bootloader, not just its config.
+	PendingVersion string `json:"pendingVersion,omitempty"`
 	// VersionUnix is the image-parsed build timestamp as a Unix time; 0 when
 	// no image was read (the SMBIOS path carries a date, not a timestamp).
 	VersionUnix int64 `json:"versionUnix,omitempty"`
@@ -142,13 +149,16 @@ func (c *Controller) GetEEPROMConfig() (EEPROMConfigSummary, error) {
 	summary.Platform = PlatformDefault
 	summary.Catalog = eepromkeys.ForPlatform(PlatformDefault)
 	// The host's SMBIOS Type 45 inventory describes the bootloader actually
-	// running; the image parse only describes whichever file sits on the FAT,
-	// so it is the fallback.
+	// running. An image parse only describes a file on the FAT — and when that
+	// file is the staged .upd, its build date is the *pending* version, not
+	// the running one, so it must not be reported as Version.
 	summary.Version = prov.Version
-	if summary.Version == "" {
+	if source == eepromPendingFile {
+		summary.PendingVersion = version
+	} else if summary.Version == "" {
 		summary.Version = version
+		summary.VersionUnix = versionUnix
 	}
-	summary.VersionUnix = versionUnix
 	summary.GitVersion = prov.GitVersion
 	summary.UpdatedUnix = prov.UpdatedUnix
 	return summary, nil
@@ -222,6 +232,13 @@ func (c *Controller) SetEEPROMConfig(ctx context.Context, bootconfTxt string) (E
 	if err := validateBootconfBytes([]byte(bootconfTxt)); err != nil {
 		return EEPROMConfigSummary{}, err
 	}
+	// A missing local image makes this download a base (see
+	// ensureEEPROMSourceImage), so a usable deadline is required.
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+	}
 	normalised := normaliseLineEndings(bootconfTxt)
 	// Drop key=value lines in [all] whose value matches the documented
 	// platform default. Keeps bootconf.txt minimal so the operator sees
@@ -230,7 +247,7 @@ func (c *Controller) SetEEPROMConfig(ctx context.Context, bootconfTxt string) (E
 	// not explicitly set).
 	normalised = eepromkeys.FilterDefaultsFromBootconf(PlatformDefault, normalised)
 
-	source, sourceName, err := c.loadEEPROMSourceImage()
+	source, sourceName, downloaded, err := c.ensureEEPROMSourceImage(ctx)
 	if err != nil {
 		return EEPROMConfigSummary{}, err
 	}
@@ -239,8 +256,14 @@ func (c *Controller) SetEEPROMConfig(ctx context.Context, bootconfTxt string) (E
 	if err != nil {
 		return EEPROMConfigSummary{}, fmt.Errorf("parse %s: %w", sourceName, err)
 	}
+	// Inject the edited config into whichever base we resolved. When the base
+	// was downloaded this also advances the bootloader to that release, since
+	// there was no local image to preserve the running version from.
 	if err := img.UpdateFile(rpieeprom.BootConfTxt, []byte(normalised)); err != nil {
 		return EEPROMConfigSummary{}, fmt.Errorf("replace bootconf.txt: %w", err)
+	}
+	if downloaded {
+		log.Infof("eeprom: staging config onto upstream %s — this also updates the bootloader", sourceName)
 	}
 
 	if err := c.stagePendingEEPROM(img); err != nil {
@@ -613,28 +636,20 @@ func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfi
 	}
 
 	// 2. Find + download the latest upstream pieeprom-*.bin.
-	latest, err := eepromupdater.FindLatest(ctx, eepromupdater.FindLatestOptions{
-		Platform: eepromupdater.PlatformRPi5,
-		Channel:  eepromupdater.ChannelStable,
-	})
+	newBytes, latestName, err := c.downloadLatestPieeprom(ctx)
 	if err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("find latest: %w", err)
-	}
-	log.Infof("eeprom: upgrading to %s (%d bytes)", latest.Name, latest.Size)
-	newBytes, err := eepromupdater.Download(ctx, latest, nil)
-	if err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("download %s: %w", latest.Name, err)
+		return EEPROMConfigSummary{}, err
 	}
 	newImg, err := rpieeprom.ParseBytes(newBytes)
 	if err != nil {
-		return EEPROMConfigSummary{}, fmt.Errorf("parse downloaded %s: %w", latest.Name, err)
+		return EEPROMConfigSummary{}, fmt.Errorf("parse downloaded %s: %w", latestName, err)
 	}
 
 	// 3. Transplant preserved bootconf into the new image (skipped on first-time
 	//    setup so the upstream default config is kept intact).
 	if preservedBootconf != nil {
 		if err := newImg.UpdateFile(rpieeprom.BootConfTxt, preservedBootconf); err != nil {
-			return EEPROMConfigSummary{}, fmt.Errorf("transplant bootconf into %s: %w", latest.Name, err)
+			return EEPROMConfigSummary{}, fmt.Errorf("transplant bootconf into %s: %w", latestName, err)
 		}
 	}
 
@@ -644,7 +659,7 @@ func (c *Controller) StageEEPROMVersionUpgrade(ctx context.Context) (EEPROMConfi
 		return EEPROMConfigSummary{}, err
 	}
 	log.Infof("eeprom: staged %s as %s with preserved bootconf from %s",
-		latest.Name, eepromPendingFile, sourceName)
+		latestName, eepromPendingFile, sourceName)
 	if err := c.EnsureRecoveryBin(ctx); err != nil {
 		log.Warnf("eeprom: ensure recovery.bin failed: %v (staged update may not flash)", err)
 	}
@@ -670,6 +685,56 @@ func (c *Controller) loadEEPROMSourceImage() ([]byte, string, error) {
 		return nil, "", fmt.Errorf("read %s: %w", eepromBinaryFile, err)
 	}
 	return nil, "", ErrNoPieepromBin
+}
+
+// downloadLatestPieeprom fetches the newest upstream pieeprom-*.bin for this
+// platform, returning its bytes and the release file name.
+func (c *Controller) downloadLatestPieeprom(ctx context.Context) ([]byte, string, error) {
+	latest, err := eepromupdater.FindLatest(ctx, eepromupdater.FindLatestOptions{
+		Platform: eepromupdater.PlatformRPi5,
+		Channel:  eepromupdater.ChannelStable,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("find latest: %w", err)
+	}
+	log.Infof("eeprom: downloading %s (%d bytes)", latest.Name, latest.Size)
+	blob, err := eepromupdater.Download(ctx, latest, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("download %s: %w", latest.Name, err)
+	}
+	return blob, latest.Name, nil
+}
+
+// ensureEEPROMSourceImage returns an image to stage a config change onto, in
+// priority order:
+//
+//  1. a staged pieeprom.upd — chain further edits onto the pending update;
+//  2. a pieeprom.bin on the FAT — a legacy dump, if some actor wrote one;
+//  3. the latest upstream pieeprom-*.bin, downloaded on demand.
+//
+// (3) is the normal path now. U-Boot publishes the live bootconf over I2C as
+// a UEFI variable instead of dumping pieeprom.bin to the FAT, so there is
+// usually no local image to modify — without a download the editor could read
+// the config but never save it (ErrNoPieepromBin on every write).
+//
+// downloaded reports whether the base came from upstream, so callers can tell
+// the operator that staging also moves the bootloader to the latest stable
+// release rather than only changing the config.
+func (c *Controller) ensureEEPROMSourceImage(ctx context.Context) (data []byte, name string, downloaded bool, err error) {
+	data, name, err = c.loadEEPROMSourceImage()
+	if err == nil {
+		return data, name, false, nil
+	}
+	if !errors.Is(err, ErrNoPieepromBin) {
+		return nil, "", false, err
+	}
+
+	data, name, err = c.downloadLatestPieeprom(ctx)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("no local pieeprom image and %w", err)
+	}
+	log.Infof("eeprom: no local image; using upstream %s as the base", name)
+	return data, name, true, nil
 }
 
 // hasFileOnImage reports whether a file at the FAT root exists and is
