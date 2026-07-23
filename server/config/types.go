@@ -24,7 +24,31 @@ type Config struct {
 	Power      Power      `yaml:"power"`
 	Telemetry  Telemetry  `yaml:"telemetry"`
 	AutoUpdate AutoUpdate `yaml:"autoUpdate"`
+	MDNS       MDNS       `yaml:"mdns"`
 	Hardware   Hardware   `yaml:"-"`
+}
+
+// MDNS configures the built-in multicast-DNS responder that advertises the
+// device's <hostname>.local A/AAAA record on the LAN. It replaces avahi-daemon;
+// like avahi on this image it only answers hostname queries — no service/TXT
+// records. The responder is scoped to a single interface (eth0 by default) so
+// the point-to-point USB host link (usb0, 169.254.10.1) never receives
+// duplicate records for the managed host. Mirrors the JetKVM internal/mdns
+// pion/mdns responder pattern.
+type MDNS struct {
+	// Enabled gates the responder. When false, nothing is advertised.
+	Enabled bool `yaml:"enabled"`
+	// Interface restricts multicast answers to this interface. Empty means all
+	// non-loopback, up interfaces (not recommended — would include usb0).
+	Interface string `yaml:"interface"`
+	// IPv4/IPv6 select which multicast responders to bind (224.0.0.251:5353 and
+	// [ff02::fb]:5353). Each bind is best-effort; a failure on one leaves the
+	// other serving.
+	IPv4 bool `yaml:"ipv4"`
+	IPv6 bool `yaml:"ipv6"`
+	// Hostname overrides the advertised name. Empty = the OS hostname
+	// (/etc/hostname); the responder appends ".local".
+	Hostname string `yaml:"hostname"`
 }
 
 // AutoUpdate configures the background updater that periodically checks

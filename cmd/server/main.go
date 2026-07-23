@@ -18,6 +18,7 @@ import (
 	"github.com/pi-bmc/nanokvm-app/server/service/efivars"
 	"github.com/pi-bmc/nanokvm-app/server/service/firmware"
 	"github.com/pi-bmc/nanokvm-app/server/service/ipmi"
+	"github.com/pi-bmc/nanokvm-app/server/service/mdns"
 	"github.com/pi-bmc/nanokvm-app/server/service/usbgadget"
 	"github.com/pi-bmc/nanokvm-app/server/telemetry"
 	"github.com/pi-bmc/nanokvm-app/server/utils"
@@ -33,7 +34,10 @@ var (
 	date    = "unknown"
 )
 
-var ipmiServer *ipmi.Server
+var (
+	ipmiServer    *ipmi.Server
+	mdnsResponder *mdns.Responder
+)
 
 func main() {
 	initialize()
@@ -87,6 +91,14 @@ func initialize() {
 
 	// Start the auto-update ticker (no-op when AutoUpdate.Enabled is false).
 	autoupdate.Start()
+
+	// Start the mDNS responder (advertises <hostname>.local). Replaces
+	// avahi-daemon; its watcher brings it up once eth0 has an address.
+	if r, err := mdns.Start(); err != nil {
+		log.Printf("mDNS start: %v", err)
+	} else {
+		mdnsResponder = r
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -151,6 +163,9 @@ func run() {
 
 func dispose() {
 	autoupdate.Stop()
+	if mdnsResponder != nil {
+		mdnsResponder.Stop()
+	}
 	if ipmiServer != nil {
 		ipmiServer.Stop()
 	}

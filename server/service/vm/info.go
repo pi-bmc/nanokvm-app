@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pi-bmc/nanokvm-app/server/proto"
+	"github.com/pi-bmc/nanokvm-app/server/service/mdns"
 )
 
 var imageVersionMap = map[string]string{
@@ -59,19 +59,14 @@ func getIPs() (ips []proto.IP) {
 }
 
 func getMdns() string {
-	// Check if avahi-daemon is running by looking for its PID file
-	pid, err := os.ReadFile("/var/run/avahi-daemon/pid")
-	if err != nil || strings.TrimSpace(string(pid)) == "" {
+	// Report the built-in mDNS responder's advertised name (e.g.
+	// "licheervnano.local"), or "" when the responder is disabled/not running.
+	// This replaced the old avahi-daemon PID-file probe.
+	name, ok := mdns.Advertised()
+	if !ok {
 		return ""
 	}
-
-	content, err := os.ReadFile("/etc/hostname")
-	if err != nil {
-		return ""
-	}
-
-	mdns := strings.ReplaceAll(string(content), "\n", "")
-	return fmt.Sprintf("%s.local", mdns)
+	return name
 }
 
 func getImageVersion() string {

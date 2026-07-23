@@ -1,6 +1,10 @@
 package config
 
-import "log"
+import (
+	"log"
+
+	"github.com/spf13/viper"
+)
 
 var defaultConfig = &Config{
 	Proto: "http",
@@ -76,6 +80,13 @@ var defaultConfig = &Config{
 		OTGRolePath:   "/proc/cviusb/otg_role",
 		PHYDevice:     "4340000.usb",
 		StatePath:     "/data/usbgadget/state.json",
+	},
+	MDNS: MDNS{
+		Enabled:   true,
+		Interface: "eth0",
+		IPv4:      true,
+		IPv6:      true,
+		Hostname:  "",
 	},
 	EfiVars: EfiVars{
 		Enabled: true,
@@ -267,6 +278,16 @@ func checkDefaultValue() {
 
 	if instance.AutoUpdate.IntervalMinutes <= 0 {
 		instance.AutoUpdate.IntervalMinutes = defaultConfig.AutoUpdate.IntervalMinutes
+	}
+
+	// mDNS: the boolean fields default true, so a zero value is ambiguous with an
+	// explicit false. When the whole section is absent (a config written before
+	// mDNS existed), seed all defaults so upgraded devices keep advertising
+	// <hostname>.local; when it is present, respect the operator's values.
+	if !viper.IsSet("mdns") {
+		instance.MDNS = defaultConfig.MDNS
+	} else if instance.MDNS.Interface == "" && !viper.IsSet("mdns.interface") {
+		instance.MDNS.Interface = defaultConfig.MDNS.Interface
 	}
 
 	instance.Hardware = getHardware()
