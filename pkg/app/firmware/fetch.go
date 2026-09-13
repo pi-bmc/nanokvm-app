@@ -55,7 +55,14 @@ func WithProgress(fn func(loaded, total int64)) FetchOption {
 
 // IsStaging reports whether a capsule fetch is currently running. Callers use
 // it to reject a second concurrent update rather than queue one.
-func (c *Controller) IsStaging() bool { return isStaging() }
+//
+// Takes no lock: the sentinel is a file, and the whole point of keeping it out
+// of the Controller's own state is that it stays readable while a fetch holds
+// c.mu. GetStatus therefore calls this with the lock already held.
+func (c *Controller) IsStaging() bool {
+	_, err := os.Stat(c.stagingSentinel)
+	return err == nil
+}
 
 // StageCapsuleFromURL downloads the capsule at rawURL and stages it into
 // \EFI\UpdateCapsule\ on the capsule volume. name overrides the filename
@@ -85,13 +92,13 @@ func (c *Controller) StageCapsuleFromURL(ctx context.Context, rawURL, name strin
 		return fmt.Errorf("cannot derive a capsule filename from %q: %w", rawURL, err)
 	}
 
-	if _, err := os.Stat(stagingSentinel); err == nil {
+	if _, err := os.Stat(c.stagingSentinel); err == nil {
 		return fmt.Errorf("a capsule is already being staged")
 	}
-	if err := os.WriteFile(stagingSentinel, []byte(fileName), 0o600); err != nil {
+	if err := os.WriteFile(c.stagingSentinel, []byte(fileName), 0o600); err != nil {
 		return fmt.Errorf("create staging sentinel: %w", err)
 	}
-	defer os.Remove(stagingSentinel)
+	defer os.Remove(c.stagingSentinel)
 
 	started := time.Now()
 	defer func() {

@@ -103,10 +103,16 @@ const (
 	volumeLabel = "CAPSULE"
 )
 
-// stagingSentinel marks an in-flight capsule fetch. A file rather than a field
-// so a crashed fetch does not wedge the controller across a restart: /tmp is a
-// RAM overlay on this board and is empty at boot.
-const stagingSentinel = "/tmp/.capsule_staging_in_progress"
+// defaultStagingSentinel marks an in-flight capsule fetch. A file rather than a
+// field so a crashed fetch does not wedge the controller across a restart:
+// /tmp is a RAM overlay on this board and is empty at boot.
+//
+// The path each Controller actually uses is Controller.stagingSentinel, not
+// this constant. A single fixed path is right for the one server process on a
+// board, but it is machine-global, so two Controllers in one process — every
+// package's tests, running in parallel under `go test ./...` — would
+// contend for it and report each other's fetches as "already being staged".
+const defaultStagingSentinel = "/tmp/.capsule_staging_in_progress"
 
 // Capsule describes one staged capsule as the host firmware will find it.
 type Capsule struct {
@@ -125,12 +131,6 @@ func capsuleVolumeBytes(sizeMB int) int64 {
 		sizeMB = capsuleMaxSizeMB
 	}
 	return int64(sizeMB) * 1024 * 1024
-}
-
-// isStaging reports whether a capsule fetch is in progress.
-func isStaging() bool {
-	_, err := os.Stat(stagingSentinel)
-	return err == nil
 }
 
 // ---------------------------------------------------------------------------
@@ -159,9 +159,14 @@ func (c *Controller) ensureVolumeExistsLocked() error {
 }
 
 // ensureVolumeLocked creates the capsule volume when it is missing and makes
-// sure \EFI\UpdateCapsule\ exists on it, so an operator who mounts the gadget
-// finds the drop box even before anything is staged. Idempotent.
-// Must hold c.mu.
+// sure \EFI\UpdateCapsule\ exists on it. Idempotent. Must hold c.mu.
+//
+// The directory is asserted here so that staging never has to, not so the host
+// can browse it: the volume is only attached to lun.0 while a capsule is
+// actually pending (see presentIfPendingLocked), and an empty drop box on an
+// otherwise idle volume is nothing for the host to find — just one more
+// removable device on the bus for its firmware to enumerate and scan.
+// Capsules reach the volume from the BMC, never from the host.
 func (c *Controller) ensureVolumeLocked() error {
 	if _, ok := c.volumeSize(); !ok {
 		return c.ensureVolumeExistsLocked()
@@ -436,22 +441,29 @@ func (c *Controller) withVolume(write bool, fn func(filesystem.FileSystem) error
 	}
 
 	if write {
-		wasPresented := c.presented
-		if wasPresented {
+		if c.presented {
 			if err := c.unpresentVolume(); err != nil {
 				return fmt.Errorf("unpresent gadget: %w", err)
 			}
-			defer func() {
-				// context.Background is deliberate: withVolume has no
-				// request-scoped ctx of its own (see its many callers, none
-				// of which carry one either), and the only thing ctx would
-				// bound here is PresentDisk's EBUSY retry loop, whose full
-				// span is well under a second regardless.
-				if err := c.presentVolume(context.Background()); err != nil {
-					c.log.Warn("firmware: re-present after write failed", slog.Any("err", err))
-				}
-			}()
 		}
+		// Presentation after a write is policy, not restoration: the volume is
+		// attached iff the write left a capsule on it. Restoring the previous
+		// state instead would re-attach a volume the write just emptied, so a
+		// host watching the bus would see the media come back only to go away
+		// again on the next reconcile.
+		//
+		// Registered before the diskfs.Open defer below so it runs after it:
+		// this re-reads the volume, which must happen with the disk closed.
+		defer func() {
+			// context.Background is deliberate: withVolume has no
+			// request-scoped ctx of its own (see its many callers, none
+			// of which carry one either), and the only thing ctx would
+			// bound here is PresentDisk's EBUSY retry loop, whose full
+			// span is well under a second regardless.
+			if err := c.reconcilePresentationLocked(context.Background()); err != nil {
+				c.log.Warn("firmware: reconcile presentation after write failed", slog.Any("err", err))
+			}
+		}()
 	}
 
 	mode := diskfs.ReadOnly
@@ -504,7 +516,18 @@ func capsuleFileName(name string) (string, error) {
 func (c *Controller) ListCapsules() ([]Capsule, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.listCapsulesLocked()
+
+	capsules, err := c.listCapsulesLocked()
+	if err != nil {
+		return capsules, err
+	}
+	// See GetStatus: a read is the only way the host's own deletions become
+	// visible, so it is also where the volume stops being attached once the
+	// host has applied everything.
+	if err := c.presentIfPendingLocked(context.Background(), len(capsules)); err != nil {
+		c.log.Warn("firmware: reconcile presentation after list failed", slog.Any("err", err))
+	}
+	return capsules, nil
 }
 
 // listCapsulesLocked is ListCapsules without the lock. Must hold c.mu.

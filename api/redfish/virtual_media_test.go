@@ -13,6 +13,7 @@ package redfish
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -36,13 +37,18 @@ const (
 	ejectMediaPath  = virtualMediaCDPath + "/Actions/VirtualMedia.EjectMedia"
 )
 
-// fakeVMGadget satisfies firmware.VMGadget so insert/eject cycles run without
+// fakeVMGadget satisfies firmware.Gadget so insert/eject cycles run without
 // the configfs tree, which does not exist in a test environment.
 type fakeVMGadget struct{ lun1 string }
 
 func (g *fakeVMGadget) InsertMedia(path string) error { g.lun1 = path; return nil }
 func (g *fakeVMGadget) EjectMedia() error             { g.lun1 = ""; return nil }
 func (g *fakeVMGadget) LUN1File() (string, bool)      { return g.lun1, g.lun1 != "" }
+
+// The capsule half of the interface is inert here: these tests drive virtual
+// media only, and lun.0's attachment is the firmware controller's own business.
+func (g *fakeVMGadget) PresentDisk(_ context.Context, _ string) error { return nil }
+func (g *fakeVMGadget) UnpresentDisk() error                          { return nil }
 
 // virtualMediaRouter mounts the VirtualMedia actions against a Firmware
 // controller whose media directory lives in t's temp dir and whose gadget is
@@ -56,7 +62,7 @@ func virtualMediaRouter(t *testing.T) (*gin.Engine, string) {
 	cfg.Firmware.MediaDir = mediaDir
 
 	fw := firmware.NewController(cfg, slog.New(slog.DiscardHandler))
-	fw.SetVMGadgetForTest(&fakeVMGadget{})
+	fw.SetGadgetForTest(&fakeVMGadget{})
 
 	h := &handlers{
 		d: &deps.Deps{

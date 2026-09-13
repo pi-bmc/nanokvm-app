@@ -60,11 +60,14 @@ type Controller struct {
 	capsulePath string // GPT image presented on lun.0
 	capsuleSize int64  // size used when the image is first created
 	mediaDir    string // staging area for ISO files the user has uploaded
+	// stagingSentinel is the in-flight-fetch marker's path; see
+	// defaultStagingSentinel for why it is per-Controller and not a const.
+	stagingSentinel string
 
 	presented bool
 
 	vmState VirtualMediaState // current virtual media insertion state
-	gadget  VMGadget          // test seam; nil means the usbgadget singleton
+	gadget  Gadget            // test seam; nil means the usbgadget singleton
 
 	log *slog.Logger
 }
@@ -74,10 +77,11 @@ type Controller struct {
 // consumer via pkg/deps instead of a package-level singleton.
 func NewController(cfg *config.Config, log *slog.Logger) *Controller {
 	return &Controller{
-		capsulePath: cfg.Firmware.CapsulePath,
-		capsuleSize: capsuleVolumeBytes(cfg.Firmware.CapsuleSizeMB),
-		mediaDir:    cfg.Firmware.MediaDir,
-		log:         logger.Or(log),
+		capsulePath:     cfg.Firmware.CapsulePath,
+		capsuleSize:     capsuleVolumeBytes(cfg.Firmware.CapsuleSizeMB),
+		mediaDir:        cfg.Firmware.MediaDir,
+		stagingSentinel: defaultStagingSentinel,
+		log:             logger.Or(log),
 	}
 }
 
@@ -96,7 +100,9 @@ func (c *Controller) Init(ctx context.Context) error {
 	if err := c.ensureVolumeLocked(); err != nil {
 		return err
 	}
-	if err := c.presentVolume(ctx); err != nil {
+	// Capsules outlive a BMC restart, so this is not always a no-op: a volume
+	// staged before the restart and not yet applied has to be attached again.
+	if err := c.reconcilePresentationLocked(ctx); err != nil {
 		c.log.Warn("firmware: USB gadget present failed (may not be available in this environment)", slog.Any("err", err))
 	}
 	return nil
@@ -108,8 +114,7 @@ func (c *Controller) GetStatus() Status {
 	defer c.mu.Unlock()
 
 	st := Status{
-		Presented:   c.presented,
-		Staging:     isStaging(),
+		Staging:     c.IsStaging(),
 		CapsulePath: c.capsulePath,
 		CapsuleDir:  capsuleDir,
 		Capsules:    []Capsule{},
@@ -120,8 +125,17 @@ func (c *Controller) GetStatus() Status {
 	}
 	if caps, err := c.listCapsulesLocked(); err == nil {
 		st.Capsules = caps
+		// The host deletes each capsule as it applies it, and it does so
+		// without telling the BMC. Reading the volume is the only way that
+		// becomes visible, so every read doubles as the reconcile that
+		// detaches a volume the host has finished with. Status is polled by
+		// the UI and Redfish, which is what keeps this current.
+		if err := c.presentIfPendingLocked(context.Background(), len(caps)); err != nil {
+			c.log.Warn("firmware: reconcile presentation for status failed", slog.Any("err", err))
+		}
 	} else if st.VolumeReady {
 		c.log.Warn("firmware: list capsules for status failed", slog.Any("err", err))
 	}
+	st.Presented = c.presented
 	return st
 }

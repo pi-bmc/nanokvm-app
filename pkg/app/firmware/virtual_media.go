@@ -14,6 +14,7 @@ package firmware
 // small FAT partition that is already full with U-Boot firmware files.
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -79,27 +80,30 @@ type VirtualMediaState struct {
 	Ephemeral bool `json:"ephemeral,omitempty"`
 }
 
-// VMGadget is the slice of the USB gadget surface the virtual-media workflow
-// drives. Production code always goes through the usbgadget singleton; tests
-// inject a fake, because configfs is absent off-device and insert/eject cycles
-// (and the ephemeral deletion that hangs off eject) would otherwise be
-// untestable.
-type VMGadget interface {
+// Gadget is the mass-storage function's two LUNs: lun.0 carries the FMP
+// capsule volume, lun.1 the virtual-media tray. Both halves sit behind one
+// interface because they are one configfs function with one owner, and
+// because the capsule volume's attach/detach policy (see
+// reconcilePresentationLocked) is otherwise as untestable off-device as the
+// media lifecycle was.
+type Gadget interface {
 	InsertMedia(path string) error
 	EjectMedia() error
 	LUN1File() (string, bool)
+	PresentDisk(ctx context.Context, path string) error
+	UnpresentDisk() error
 }
 
-func (c *Controller) vmGadget() VMGadget {
+func (c *Controller) massStorage() Gadget {
 	if c.gadget != nil {
 		return c.gadget
 	}
 	return usbgadget.Get()
 }
 
-// SetVMGadgetForTest routes the controller's virtual-media gadget calls
-// through g. Test-only; call before any media operation.
-func (c *Controller) SetVMGadgetForTest(g VMGadget) { c.gadget = g }
+// SetGadgetForTest routes the controller's mass-storage gadget calls through
+// g. Test-only; call before any media or capsule operation.
+func (c *Controller) SetGadgetForTest(g Gadget) { c.gadget = g }
 
 // ephemeralMarkerPath is the sidecar recording that name was inserted with the
 // ephemeral contract. A file rather than memory because the insertion itself
@@ -132,7 +136,7 @@ func (c *Controller) GetVirtualMediaState() VirtualMediaState {
 // ephemeral contract is recovered from the on-disk marker. Caller must hold
 // c.mu.
 func (c *Controller) recoverVMStateFromGadget() (VirtualMediaState, bool) {
-	path, ok := c.vmGadget().LUN1File()
+	path, ok := c.massStorage().LUN1File()
 	if !ok {
 		return VirtualMediaState{}, false
 	}
@@ -294,7 +298,7 @@ func (c *Controller) insertStagedMedia(name string, ephemeral bool) error {
 		return fmt.Errorf("media file %q not found: %w", name, err)
 	}
 
-	if err := c.vmGadget().InsertMedia(srcPath); err != nil {
+	if err := c.massStorage().InsertMedia(srcPath); err != nil {
 		return fmt.Errorf("insert virtual media: %w", err)
 	}
 
@@ -333,7 +337,7 @@ func (c *Controller) EjectVirtualMedia() error {
 
 	prev := c.vmState
 
-	if err := c.vmGadget().EjectMedia(); err != nil {
+	if err := c.massStorage().EjectMedia(); err != nil {
 		return fmt.Errorf("eject virtual media: %w", err)
 	}
 

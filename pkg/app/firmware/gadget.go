@@ -10,7 +10,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/pi-bmc/nanokvm-app/pkg/device/usbgadget"
 	"github.com/pi-bmc/nanokvm-app/pkg/platform/telemetry"
 )
 
@@ -29,7 +28,7 @@ func (c *Controller) presentVolume(ctx context.Context) error {
 	if c.presented {
 		return nil
 	}
-	if err := usbgadget.Get().PresentDisk(ctx, c.capsulePath); err != nil {
+	if err := c.massStorage().PresentDisk(ctx, c.capsulePath); err != nil {
 		return err
 	}
 	c.presented = true
@@ -51,7 +50,7 @@ func (c *Controller) unpresentVolume() error {
 	if !c.presented {
 		return nil
 	}
-	if err := usbgadget.Get().UnpresentDisk(); err != nil {
+	if err := c.massStorage().UnpresentDisk(); err != nil {
 		return err
 	}
 	c.presented = false
@@ -59,6 +58,40 @@ func (c *Controller) unpresentVolume() error {
 	telemetry.FirmwarePresented(context.Background(), false)
 	c.log.Info("firmware: unpresented USB gadget")
 	return nil
+}
+
+// presentIfPendingLocked attaches the capsule volume to lun.0 when at least one
+// capsule is waiting for the host and detaches it when none are. Both halves
+// are idempotent, so this is safe to call on every path that can change or
+// observe the capsule set.
+//
+// The volume is attached only while there is something to apply. An empty
+// \EFI\UpdateCapsule\ gives host firmware nothing to find, so a permanently
+// attached LUN just adds a removable device for the host to enumerate and scan
+// at every boot. Detaching also means the host's own view answers "is an update
+// pending?" without asking the BMC.
+//
+// Callers that have just listed the volume pass their own count rather than
+// paying for a second read; see reconcilePresentationLocked for the rest.
+// Must hold c.mu.
+func (c *Controller) presentIfPendingLocked(ctx context.Context, pending int) error {
+	if pending > 0 {
+		return c.presentVolume(ctx)
+	}
+	return c.unpresentVolume()
+}
+
+// reconcilePresentationLocked reads the capsule volume and applies
+// presentIfPendingLocked to what it finds. Must hold c.mu.
+//
+// This must never be called from listCapsulesLocked or from the read path of
+// withVolume: it calls the former, and doing so would recurse.
+func (c *Controller) reconcilePresentationLocked(ctx context.Context) error {
+	capsules, err := c.listCapsulesLocked()
+	if err != nil {
+		return err
+	}
+	return c.presentIfPendingLocked(ctx, len(capsules))
 }
 
 // Present presents the capsule volume via USB gadget (public, acquires lock).

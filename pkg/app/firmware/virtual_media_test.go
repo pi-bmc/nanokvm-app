@@ -11,6 +11,7 @@ package firmware
 // eject a crash interrupted.
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -20,14 +21,31 @@ import (
 )
 
 // fakeVMGadget stands in for the configfs-backed gadget, which does not exist
-// off-device. lun1 mirrors what the kernel would persist across a restart.
+// off-device. lun1 mirrors what the kernel would persist across a restart, and
+// lun0 the capsule volume's backing file. calls records the capsule LUN's
+// attach/detach sequence, so a test can assert not just the end state but that
+// the host was not made to watch the media flap on the way there.
 type fakeVMGadget struct {
-	lun1 string
+	lun1  string
+	lun0  string
+	calls []string
 }
 
 func (g *fakeVMGadget) InsertMedia(path string) error { g.lun1 = path; return nil }
 func (g *fakeVMGadget) EjectMedia() error             { g.lun1 = ""; return nil }
 func (g *fakeVMGadget) LUN1File() (string, bool)      { return g.lun1, g.lun1 != "" }
+
+func (g *fakeVMGadget) PresentDisk(_ context.Context, path string) error {
+	g.lun0 = path
+	g.calls = append(g.calls, "present")
+	return nil
+}
+
+func (g *fakeVMGadget) UnpresentDisk() error {
+	g.lun0 = ""
+	g.calls = append(g.calls, "unpresent")
+	return nil
+}
 
 func mediaController(t *testing.T) (*Controller, *fakeVMGadget, string) {
 	t.Helper()
@@ -36,7 +54,7 @@ func mediaController(t *testing.T) (*Controller, *fakeVMGadget, string) {
 	cfg.Firmware.MediaDir = dir
 	c := NewController(cfg, slog.New(slog.DiscardHandler))
 	g := &fakeVMGadget{}
-	c.SetVMGadgetForTest(g)
+	c.SetGadgetForTest(g)
 	return c, g, dir
 }
 
@@ -136,7 +154,7 @@ func TestEphemeralContractSurvivesRestart(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Firmware.MediaDir = dir
 	c2 := NewController(cfg, slog.New(slog.DiscardHandler))
-	c2.SetVMGadgetForTest(g)
+	c2.SetGadgetForTest(g)
 
 	st := c2.GetVirtualMediaState()
 	if !st.Inserted || st.ImageName != "cloud.iso" || !st.Ephemeral {

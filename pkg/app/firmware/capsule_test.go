@@ -15,12 +15,20 @@ import (
 
 // newTestController builds a Controller pointed at a capsule volume inside t's
 // temp dir. presented stays false, so no code path here touches configfs.
+//
+// The staging sentinel is given a path inside that temp dir too. Left at the
+// production default it is one machine-global file, which every package's
+// tests would share: `go test ./...` runs packages in parallel, so a fetch
+// here would surface in another package as a spurious "a capsule is already
+// being staged".
 func newTestController(t *testing.T) *Controller {
 	t.Helper()
+	dir := t.TempDir()
 	return &Controller{
-		capsulePath: filepath.Join(t.TempDir(), "capsules.img"),
-		capsuleSize: capsuleVolumeBytes(capsuleMinSizeMB),
-		log:         slog.New(slog.DiscardHandler),
+		capsulePath:     filepath.Join(dir, "capsules.img"),
+		capsuleSize:     capsuleVolumeBytes(capsuleMinSizeMB),
+		stagingSentinel: filepath.Join(dir, ".staging"),
+		log:             slog.New(slog.DiscardHandler),
 	}
 }
 

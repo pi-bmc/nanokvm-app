@@ -16,6 +16,7 @@ package fragments
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -70,6 +71,11 @@ func (g *fakeVMGadget) InsertMedia(path string) error { g.lun1 = path; return ni
 func (g *fakeVMGadget) EjectMedia() error             { g.lun1 = ""; return nil }
 func (g *fakeVMGadget) LUN1File() (string, bool)      { return g.lun1, g.lun1 != "" }
 
+// The capsule half of the interface is inert here: these tests drive virtual
+// media only, and lun.0's attachment is the firmware controller's own business.
+func (g *fakeVMGadget) PresentDisk(_ context.Context, _ string) error { return nil }
+func (g *fakeVMGadget) UnpresentDisk() error                          { return nil }
+
 // mediaRouterWithGadget is mediaRouter plus a fake gadget, so a successful
 // upload actually reaches its "Uploaded and mounted" toast instead of
 // failing at InsertVirtualMedia the way mediaRouter's callers expect (see
@@ -84,7 +90,7 @@ func mediaRouterWithGadget(t *testing.T) (*gin.Engine, string) {
 	cfg := &config.Config{}
 	cfg.Firmware.MediaDir = mediaDir
 	ctrl := firmware.NewController(cfg, slog.New(slog.DiscardHandler))
-	ctrl.SetVMGadgetForTest(&fakeVMGadget{})
+	ctrl.SetGadgetForTest(&fakeVMGadget{})
 	d := &deps.Deps{Config: cfg, Firmware: ctrl}
 
 	r := gin.New()

@@ -330,8 +330,13 @@ func registerMedia(fw *gin.RouterGroup, ctrl *firmware.Controller) {
 const presentTimeout = 15 * time.Second
 
 // registerGadget wires the USB gadget presentation controls for lun.0 (the
-// capsule volume). Unpresenting hides the volume from the host entirely; it is
-// re-presented automatically around every capsule write.
+// capsule volume).
+//
+// Both are diagnostics only, and their effect is transient: lun.0's attachment
+// is derived state, reconciled from whether any capsule is actually pending
+// (pkg/app/firmware, presentIfPendingLocked). A manual present with nothing
+// staged — or a manual unpresent with a capsule still waiting — is undone by
+// the next capsule write or status read. Nothing in the tree calls either one.
 func registerGadget(fw *gin.RouterGroup, h *handlers, ctrl *firmware.Controller) {
 	fw.POST("/present", func(c *gin.Context) {
 		// Detached from the request, like SimpleUpdate's capsule fetch above:
