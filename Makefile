@@ -72,12 +72,15 @@ COMMIT := $(shell git rev-parse HEAD)
 DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
+# Deliberately not upx-packed: a packed binary decompresses itself into
+# anonymous memory on every start, which on a ~80MB device is RAM the kernel
+# can never reclaim. Unpacked, its pages are mmap'd from flash on demand and
+# can be evicted under pressure.
 dist/server/NanoKVM-Server:
 	@echo "Creating output directory..."
 	@mkdir -p dist/server
 	@go mod tidy
 	@CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -trimpath -ldflags "$(LDFLAGS)" -o ./dist/server/NanoKVM-Server ./cmd/server
-	@upx -q -v ./dist/server/NanoKVM-Server
 
 dist/rpiboot/rpiboot:
 	@mkdir -p dist/rpiboot

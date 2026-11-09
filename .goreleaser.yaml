@@ -53,10 +53,9 @@ builds:
     # other unrelated tool name is not a case this axis produces today.
     skip: '{{ not (contains (envOrDefault "BOARD_TOOLS" "rpiboot bmc-sensord") "rpiboot") }}'
 
-upx:
-  - enabled: true
-    compress: best
-    lzma: true
+# Deliberately no upx block: release archives are what devices self-update
+# from, and a packed binary decompresses into anonymous RAM on every start
+# (unreclaimable on a ~80MB device). See the Makefile's dist/server comment.
 
 archives:
   - id: nanokvm

@@ -4,7 +4,7 @@ Go BMC/KVM server for NanoKVM hardware (riscv64 target). Gin HTTP + templ server
 
 ## Commands
 
-- `make app` - full build: go generate → clean → `golangci-lint fmt` → riscv64 build (+upx)
+- `make app` - full build: go generate → clean → `golangci-lint fmt` → riscv64 build (deliberately no upx: a packed binary decompresses into RAM on a ~80MB device)
 - `go generate ./...` - regenerates `*_templ.go` from `ui/**/*.templ` (via `go tool templ generate`); never edit `*_templ.go` by hand
 - `golangci-lint fmt ./...` - format; `golangci-lint run` - lint (config: .golangci.yml, v2)
 - `go test -race -count=1 ./...` - tests (CI uses gotestsum with CGO_ENABLED=1)
