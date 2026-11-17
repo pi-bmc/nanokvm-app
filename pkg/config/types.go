@@ -19,6 +19,7 @@ type Config struct {
 	SSH            SSH       `yaml:"ssh"`
 	Firmware       Firmware  `yaml:"firmware"`
 	UsbGadget      UsbGadget `yaml:"usbGadget"`
+	Display        Display   `yaml:"display"`
 
 	Power      Power      `yaml:"power"`
 	Telemetry  Telemetry  `yaml:"telemetry"`
@@ -406,6 +407,51 @@ type SSH struct {
 	// account Redfish/IPMI/Basic-Auth use) as an SSH password. Public-key auth
 	// is always available; set this false to require keys.
 	PasswordAuth bool `yaml:"passwordAuth" json:"passwordAuth"`
+}
+
+// Display configures the front-panel status display (pkg/device/oled): a
+// 128x64 SSD1306 OLED on an I2C bus of its own, showing the host's power
+// state, how to reach the BMC, and anything that is wrong.
+//
+// The display is optional hardware on a pin header, so "configured" and
+// "fitted" are different things. Enabled says the BMC should drive a panel if
+// one answers; a board with nothing plugged in simply keeps probing, and a
+// kernel with no such bus at all logs that once and stops. Neither is an
+// error, which is why this can default on.
+type Display struct {
+	// Enabled gates the whole subsystem. When false the bus is never opened.
+	Enabled bool `yaml:"enabled"`
+	// Device is the i2c-dev bus the panel is wired to, e.g. "/dev/i2c-3".
+	// Empty — the default — means the board's own display bus: IIC3 on the
+	// SD1_CMD/SD1_CLK pads, found by its controller address rather than by
+	// number, so that a renumbered kernel, or this binary run on some other
+	// machine, can never land the display's writes on an unrelated bus. Set
+	// it only to drive a panel wired somewhere else. See
+	// docs/oled-display.md.
+	Device string `yaml:"device"`
+	// Address is the panel's 7-bit I2C address as a string ("0x3c"), the
+	// same spelling UsbGadget uses for its hex fields: yaml would otherwise
+	// rewrite a hex integer as decimal 60 the first time the file is saved.
+	// The modules ship at 0x3c. Their other strap, 0x3d, is best avoided on
+	// this board: the capture stack's sensor shim registers a placeholder
+	// client at 0x3d on every adapter.
+	Address string `yaml:"address"`
+	// Flip rotates the image 180 degrees for a module mounted with its pin
+	// header at the bottom. On a yellow/blue panel that also moves the
+	// yellow band to the bottom edge, and the header row follows it there.
+	Flip bool `yaml:"flip"`
+	// Brightness is the panel contrast, 1..255. An int rather than a uint8
+	// so that an out-of-range value is something defaulting can correct: as
+	// a uint8 it would fail the whole file's decode, and a typo in a
+	// display setting must not be what stops a BMC from starting.
+	Brightness int `yaml:"brightness"`
+	// PageSeconds is how long each page of the body area stays up.
+	PageSeconds int `yaml:"pageSeconds"`
+	// DimAfterMinutes drops the panel to its lowest readable contrast once
+	// nothing has changed for this long, to slow OLED wear on a display
+	// that is lit for years. Any event — a power transition, a new address,
+	// an alert — brings it back to Brightness. 0 never dims.
+	DimAfterMinutes int `yaml:"dimAfterMinutes"`
 }
 
 // Firmware configures how the BMC delivers firmware to the managed host.

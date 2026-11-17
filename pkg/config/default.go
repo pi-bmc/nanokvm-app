@@ -133,6 +133,20 @@ var defaultConfig = &Config{
 		OTGRolePath:   "/proc/cviusb/otg_role",
 		PHYDevice:     "4340000.usb",
 	},
+	// On by default: an absent panel costs one unacknowledged I2C transfer
+	// every few seconds on a bus nothing else is wired to, and a kernel
+	// without that bus ends the probing at the first attempt. Requiring an
+	// operator to enable it would mean a display that does nothing when
+	// plugged in.
+	Display: Display{
+		Enabled:         true,
+		Device:          "", // the board's own display bus; see Display.Device
+		Address:         "0x3c",
+		Flip:            false,
+		Brightness:      0x8F,
+		PageSeconds:     5,
+		DimAfterMinutes: 10,
+	},
 	// No MDNS: here. The legacy top-level block is migration input only, so
 	// defaulting it would write the very key migrateDiscovery exists to
 	// remove — and would make a default-config boot look like an upgrade.
@@ -207,6 +221,7 @@ func checkDefaultValue() error {
 	}
 
 	applyUsbGadgetDefaults()
+	applyDisplayDefaults()
 	applyTelemetryDefaults()
 	applyAutoUpdateDefaults()
 
@@ -229,6 +244,45 @@ func checkDefaultValue() error {
 		persistConfig()
 	}
 	return nil
+}
+
+// applyDisplayDefaults backfills the display section. A config written before
+// the display existed has no such section and gets the defaults whole, so an
+// upgraded board starts driving a panel as soon as one is plugged in.
+//
+// Within an existing section, enabled and dimAfterMinutes go through
+// viper.IsSet because their zero values are real answers (off, and never
+// dim); brightness and pageSeconds do not, because theirs are not — a panel
+// at contrast 0 is unreadable and a page that stays up for no time is not a
+// page.
+//
+// device is not backfilled: empty is its default, meaning "find the board's
+// display bus" (see Display.Device).
+//
+// An address that does not parse is left as written. It is rejected where it
+// is used (oled.Service.Start), which can log it; coercing it here would
+// have the BMC quietly probing an address the operator did not ask for.
+func applyDisplayDefaults() {
+	if !viper.IsSet("display") {
+		instance.Display = defaultConfig.Display
+		return
+	}
+
+	if !viper.IsSet("display.enabled") {
+		instance.Display.Enabled = defaultConfig.Display.Enabled
+	}
+	if instance.Display.Address == "" {
+		instance.Display.Address = defaultConfig.Display.Address
+	}
+	if instance.Display.Brightness < 1 || instance.Display.Brightness > 0xFF {
+		instance.Display.Brightness = defaultConfig.Display.Brightness
+	}
+	if instance.Display.PageSeconds <= 0 {
+		instance.Display.PageSeconds = defaultConfig.Display.PageSeconds
+	}
+	if !viper.IsSet("display.dimAfterMinutes") || instance.Display.DimAfterMinutes < 0 {
+		instance.Display.DimAfterMinutes = defaultConfig.Display.DimAfterMinutes
+	}
 }
 
 // applyPowerDefaults normalises power.reset: an absent key defaults to

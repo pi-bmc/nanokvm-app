@@ -210,6 +210,17 @@ func initialize(ctx context.Context) {
 	// the Redfish routes both read it.
 	redfish.LoadHostState(rootLog.With("component", "redfish"))
 
+	// Light the front-panel status display. Early, and before the slow
+	// bring-up below (gadget, network, capsule volume): a display that shows
+	// "no link" and then an address is telling the operator how boot is
+	// going, which is most of what it is for. After the controllers and the
+	// host state above because it reads all of them. A board with no panel
+	// fitted — or no such bus at all — is not an error; see pkg/device/oled.
+	displaySvc = newDisplay(cfg)
+	if err := displaySvc.Start(ctx); err != nil {
+		slog.ErrorContext(ctx, "display start failed", slog.Any("err", err))
+	}
+
 	// Build the USB gadget (g0 + all functions + UDC bind) before presenting the
 	// capsule volume. usbgadget is the sole owner of the gadget configfs — this
 	// replaces the old S03usbdev init script — so the host-visible topology and
@@ -618,6 +629,10 @@ func disposeAll() {
 	stopBounded("discovery", discovery.Stop)
 	if ipmiServer != nil {
 		stopBounded("ipmi", ipmiServer.Stop)
+	}
+	// Blanks the panel. Before power, whose state it reads on every tick.
+	if displaySvc != nil {
+		stopBounded("display", displaySvc.Stop)
 	}
 	// Power is closed late, after every other subsystem that might still be
 	// mid-sequence on it (IPMI's chassis control, a Redfish power action) has

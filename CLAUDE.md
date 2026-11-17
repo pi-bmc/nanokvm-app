@@ -17,12 +17,14 @@ Go BMC/KVM server for NanoKVM hardware (riscv64 target). Gin HTTP + templ server
 ## Layout
 
 - `cmd/` entrypoints (server, rpiboot) · `api/` HTTP handlers · `ui/` templ pages/components/fragments
-- `pkg/` domain packages, nested by purpose: `app/` (application, auth, autoupdate, firmware, network, timesync) · `device/` (bmcsensor, hid, optee, power, serial, usbgadget, video) · `protocol/` (discovery, identity, ipmi, redfish, shell, ssh) · `platform/` (ctxutil, memlimit, middleware, ring, streamio, sysinfo, telemetry) · flat: `config`, `deps`, `logger`, `proto` (see .claude/docs/package-layout.md)
+- `pkg/` domain packages, nested by purpose: `app/` (application, auth, autoupdate, firmware, network, timesync) · `device/` (bmcsensor, hid, oled, optee, power, serial, usbgadget, video) · `protocol/` (discovery, identity, ipmi, redfish, shell, ssh) · `platform/` (ctxutil, memlimit, middleware, ring, streamio, sysinfo, telemetry) · flat: `config`, `deps`, `logger`, `proto` (see .claude/docs/package-layout.md)
 - UI components vendored via shadcn-templ (`components.json`); add new ones with `shadcn-templ add <name>`
 
 ## Device constraints
 
 - On-device `/tmp` is a ~30MB RAM overlay — never route uploads/ISOs through `os.TempDir()`; use `pkg/platform/streamio` streaming helpers (`StreamMultipartFile`, `FetchURL`)
+
+- I2C: bus 0 is a *slave* (host sensor EEPROM), bus 4 is the kernel-owned HDMI bridge on 1.8V pads; the OLED has its own bus 3. Pin map and wiring: docs/oled-display.md
 
 ## Logging
 
